@@ -7,6 +7,7 @@
 #include "cbase.h"
 #include "npcevent.h"
 #include "in_buttons.h"
+#include "ai_basenpc_shared.h"
 
 #ifdef CLIENT_DLL
 	#include "c_hl2mp_player.h"
@@ -40,7 +41,14 @@
 extern ConVar sk_plr_dmg_crossbow;
 extern ConVar sk_npc_dmg_crossbow;
 
+#ifdef MAPBASE
+ConVar weapon_crossbow_new_hit_locations( "weapon_crossbow_new_hit_locations", "1", FCVAR_NONE, "Toggles new crossbow knockback that properly pushes back the correct limbs." );
+#endif
+
 void TE_StickyBolt( IRecipientFilter& filter, float delay,	Vector vecDirection, const Vector *origin );
+
+#define	BOLT_SKIN_NORMAL	0
+#define BOLT_SKIN_GLOW		1
 
 //-----------------------------------------------------------------------------
 // Crossbow Bolt
@@ -50,7 +58,7 @@ class CCrossbowBolt : public CBaseCombatCharacter
 	DECLARE_CLASS( CCrossbowBolt, CBaseCombatCharacter );
 
 public:
-	CCrossbowBolt() { };
+	CCrossbowBolt();
 	~CCrossbowBolt();
 
 	Class_T Classify( void ) { return CLASS_NONE; }
@@ -62,7 +70,20 @@ public:
 	void BoltTouch( CBaseEntity *pOther );
 	bool CreateVPhysics( void );
 	unsigned int PhysicsSolidMaskForEntity() const;
+#ifdef MAPBASE
+	static CCrossbowBolt *BoltCreate( const Vector &vecOrigin, const QAngle &angAngles, CBaseCombatCharacter *pentOwner = NULL )
+	{
+		return BoltCreate( vecOrigin, angAngles, 0, pentOwner );
+	}
+	static CCrossbowBolt *BoltCreate( const Vector &vecOrigin, const QAngle &angAngles, int iDamage, CBaseCombatCharacter *pentOwner = NULL );
+
+	void InputSetDamage( inputdata_t &inputdata );
+	float m_flDamage;
+
+	virtual void SetDamage(float flDamage) { m_flDamage = flDamage; }
+#else
 	static CCrossbowBolt *BoltCreate( const Vector &vecOrigin, const QAngle &angAngles, int iDamage, CBasePlayer *pentOwner = NULL );
+#endif
 
 protected:
 
@@ -70,8 +91,10 @@ protected:
 
 	CHandle<CSprite>		m_pGlowSprite;
 	//CHandle<CSpriteTrail>	m_pGlowTrail;
-	
+
+#ifndef MAPBASE
 	int		m_iDamage;
+#endif
 
 	DECLARE_DATADESC();
 	DECLARE_SERVERCLASS();
@@ -87,12 +110,23 @@ BEGIN_DATADESC( CCrossbowBolt )
 	DEFINE_FIELD( m_pGlowSprite, FIELD_EHANDLE ),
 	//DEFINE_FIELD( m_pGlowTrail, FIELD_EHANDLE ),
 
+#ifdef MAPBASE
+	DEFINE_KEYFIELD( m_flDamage, FIELD_FLOAT, "Damage" ),
+
+	// Inputs
+	DEFINE_INPUTFUNC( FIELD_FLOAT, "SetDamage", InputSetDamage ),
+#endif
+
 END_DATADESC()
 
 IMPLEMENT_SERVERCLASS_ST( CCrossbowBolt, DT_CrossbowBolt )
 END_SEND_TABLE()
 
+#ifdef MAPBASE
+CCrossbowBolt *CCrossbowBolt::BoltCreate( const Vector &vecOrigin, const QAngle &angAngles, int iDamage, CBaseCombatCharacter *pentOwner )
+#else
 CCrossbowBolt *CCrossbowBolt::BoltCreate( const Vector &vecOrigin, const QAngle &angAngles, int iDamage, CBasePlayer *pentOwner )
+#endif
 {
 	// Create a new entity with CCrossbowBolt private data
 	CCrossbowBolt *pBolt = (CCrossbowBolt *)CreateEntityByName( "crossbow_bolt" );
@@ -100,10 +134,25 @@ CCrossbowBolt *CCrossbowBolt::BoltCreate( const Vector &vecOrigin, const QAngle 
 	pBolt->SetAbsAngles( angAngles );
 	pBolt->Spawn();
 	pBolt->SetOwnerEntity( pentOwner );
-
-	pBolt->m_iDamage = iDamage;
+#ifdef MAPBASE
+	if (pentOwner && pentOwner->IsNPC())
+		pBolt->m_flDamage = sk_npc_dmg_crossbow.GetFloat();
+	else if (iDamage != 0)
+		pBolt->m_flDamage = (float)iDamage;
+#endif
 
 	return pBolt;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+CCrossbowBolt::CCrossbowBolt( void )
+{
+#ifdef MAPBASE
+	// Independent bolts without m_flDamage set need damage
+	m_flDamage = sk_plr_dmg_crossbow.GetFloat();
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -194,14 +243,40 @@ void CCrossbowBolt::Precache( void )
 	PrecacheModel( "sprites/light_glow02_noz.vmt" );
 }
 
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CCrossbowBolt::InputSetDamage( inputdata_t &inputdata )
+{
+	m_flDamage = inputdata.value.Float();
+}
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Input  : *pOther - 
 //-----------------------------------------------------------------------------
 void CCrossbowBolt::BoltTouch( CBaseEntity *pOther )
 {
-	if ( !pOther->IsSolid() || pOther->IsSolidFlagSet(FSOLID_VOLUME_CONTENTS) )
-		return;
+	if ( pOther->IsSolidFlagSet(FSOLID_VOLUME_CONTENTS | FSOLID_TRIGGER) )
+	{
+		// Some NPCs are triggers that can take damage (like antlion grubs). We should hit them.
+#ifdef MAPBASE
+		// But some physics objects that are also triggers (like weapons) shouldn't go through this check.
+		// 
+		// Note: rpg_missile has the same code, except it properly accounts for weapons in a different way.
+		// This was discovered after I implemented this and both work fine, but if this ever causes problems,
+		// use rpg_missile's implementation:
+		// 
+		// if ( pOther->IsSolidFlagSet(FSOLID_TRIGGER|FSOLID_VOLUME_CONTENTS) && pOther->GetCollisionGroup() != COLLISION_GROUP_WEAPON )
+		// 
+		if ( pOther->GetMoveType() == MOVETYPE_NONE && (( pOther->m_takedamage == DAMAGE_NO ) || ( pOther->m_takedamage == DAMAGE_EVENTS_ONLY )) )
+#else
+		if ( ( pOther->m_takedamage == DAMAGE_NO ) || ( pOther->m_takedamage == DAMAGE_EVENTS_ONLY ) )
+#endif
+			return;
+	}
 
 	if ( pOther->m_takedamage != DAMAGE_NO )
 	{
@@ -212,9 +287,57 @@ void CCrossbowBolt::BoltTouch( CBaseEntity *pOther )
 		ClearMultiDamage();
 		VectorNormalize( vecNormalizedVel );
 
+#if defined(HL2_EPISODIC)
+		//!!!HACKHACK - specific hack for ep2_outland_10 to allow crossbow bolts to pass through her bounding box when she's crouched in front of the player
+		// (the player thinks they have clear line of sight because Alyx is crouching, but her BBOx is still full-height and blocks crossbow bolts.
+		if( GetOwnerEntity() && GetOwnerEntity()->IsPlayer() && pOther->Classify() == CLASS_PLAYER_ALLY_VITAL && FStrEq(STRING(gpGlobals->mapname), "ep2_outland_10") )
+		{
+			// Change the owner to stop further collisions with Alyx. We do this by making her the owner.
+			// The player won't get credit for this kill but at least the bolt won't magically disappear!
+			SetOwnerEntity( pOther );
+			return;
+		}
+#endif//HL2_EPISODIC
+
+#ifdef MAPBASE
+		if (weapon_crossbow_new_hit_locations.GetInt() > 0)
+		{
+			// A very experimental and weird way of getting a crossbow bolt to deal accurate knockback.
+			CBaseAnimating *pOtherAnimating = pOther->GetBaseAnimating();
+			if (pOtherAnimating && pOtherAnimating->GetModelPtr() && pOtherAnimating->GetModelPtr()->numbones() > 1)
+			{
+				int iClosestBone = -1;
+				float flCurDistSqr = Square(128.0f);
+				matrix3x4_t bonetoworld;
+				Vector vecBonePos;
+				for (int i = 0; i < pOtherAnimating->GetModelPtr()->numbones(); i++)
+				{
+					pOtherAnimating->GetBoneTransform( i, bonetoworld );
+					MatrixPosition( bonetoworld, vecBonePos );
+
+					float flDist = vecBonePos.DistToSqr(GetLocalOrigin());
+					if (flDist < flCurDistSqr)
+					{
+						iClosestBone = i;
+						flCurDistSqr = flDist;
+					}
+				}
+
+				if (iClosestBone != -1)
+				{
+					tr.physicsbone = pOtherAnimating->GetPhysicsBone(iClosestBone);
+				}
+			}
+		}
+#endif
+
 		if( GetOwnerEntity() && GetOwnerEntity()->IsPlayer() && pOther->IsNPC() )
 		{
+#ifdef MAPBASE
+			CTakeDamageInfo	dmgInfo( this, GetOwnerEntity(), m_flDamage, DMG_NEVERGIB );
+#else
 			CTakeDamageInfo	dmgInfo( this, GetOwnerEntity(), m_iDamage, DMG_NEVERGIB );
+#endif
 			dmgInfo.AdjustPlayerDamageInflictedForSkillLevel();
 			CalculateMeleeDamageForce( &dmgInfo, vecNormalizedVel, tr.endpos, 0.7f );
 			dmgInfo.SetDamagePosition( tr.endpos );
@@ -222,7 +345,11 @@ void CCrossbowBolt::BoltTouch( CBaseEntity *pOther )
 		}
 		else
 		{
+#ifdef MAPBASE
+			CTakeDamageInfo	dmgInfo( this, GetOwnerEntity(), m_flDamage, DMG_BULLET | DMG_NEVERGIB );
+#else
 			CTakeDamageInfo	dmgInfo( this, GetOwnerEntity(), m_iDamage, DMG_BULLET | DMG_NEVERGIB );
+#endif
 			CalculateMeleeDamageForce( &dmgInfo, vecNormalizedVel, tr.endpos, 0.7f );
 			dmgInfo.SetDamagePosition( tr.endpos );
 			pOther->DispatchTraceAttack( dmgInfo, vecNormalizedVel, &tr );
@@ -372,6 +499,9 @@ void CCrossbowBolt::BubbleThink( void )
 
 	SetNextThink( gpGlobals->curtime + 0.1f );
 
+	// Make danger sounds out in front of me, to scare snipers back into their hole
+	CSoundEnt::InsertSound( SOUND_DANGER_SNIPERONLY, GetAbsOrigin() + GetAbsVelocity() * 0.2, 120.0f, 0.5f, this, SOUNDENT_CHANNEL_REPEATED_DANGER );
+
 	if ( GetWaterLevel()  == 0 )
 		return;
 
@@ -388,9 +518,9 @@ void CCrossbowBolt::BubbleThink( void )
 #define CWeaponCrossbow C_WeaponCrossbow
 #endif
 
-class CWeaponCrossbow : public CBaseHL2MPCombatWeapon
+class CWeaponCrossbow : public CBaseHLCombatWeapon
 {
-	DECLARE_CLASS( CWeaponCrossbow, CBaseHL2MPCombatWeapon );
+	DECLARE_CLASS( CWeaponCrossbow, CBaseHLCombatWeapon );
 public:
 
 	CWeaponCrossbow( void );
@@ -404,23 +534,55 @@ public:
 	virtual void	ItemPostFrame( void );
 	virtual void	ItemBusyFrame( void );
 	virtual bool	SendWeaponAnim( int iActivity );
+	virtual bool	IsWeaponZoomed() { return m_bInZoom; }
 
-#ifndef CLIENT_DLL
 	virtual void Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator );
+
+#ifdef MAPBASE
+#ifndef CLIENT_DLL
+	virtual void	Operator_ForceNPCFire( CBaseCombatCharacter *pOperator, bool bSecondary );
+	virtual void	Reload_NPC( bool bPlaySound = true );
+
+	int		CapabilitiesGet( void ) { return bits_CAP_WEAPON_RANGE_ATTACK1; }
+#endif
+
+	virtual int	GetMinBurst() { return 1; }
+	virtual int	GetMaxBurst() { return 1; }
+
+	virtual float	GetMinRestTime( void ) { return 3.0f; } // 1.5f
+	virtual float	GetMaxRestTime( void ) { return 3.0f; } // 2.0f
+
+	virtual float GetFireRate( void )  { return 5.0f; }
+
+	virtual const Vector& GetBulletSpread( void )
+	{
+		static Vector cone = VECTOR_CONE_15DEGREES;
+		if (!GetOwner() || !GetOwner()->IsNPC())
+			return cone;
+
+		static Vector NPCCone = VECTOR_CONE_5DEGREES;
+
+		return NPCCone;
+	}
 #endif
 
 	DECLARE_NETWORKCLASS(); 
 	DECLARE_PREDICTABLE();
 
 #ifndef CLIENT_DLL
-	DECLARE_ACTTABLE();
+	DECLARE_DATADESC();
 #endif
+	DECLARE_ACTTABLE();
 
 private:
 	
 	void	SetSkin( int skinNum );
 	void	CheckZoomToggle( void );
 	void	FireBolt( void );
+#ifdef MAPBASE
+	void	SetBolt( int iSetting );
+	void	FireNPCBolt( CAI_BaseNPC *pOwner, Vector &vecShootOrigin, Vector &vecShootDir );
+#endif
 	void	ToggleZoom( void );
 	
 	// Various states for the crossbow's charger
@@ -480,15 +642,140 @@ PRECACHE_WEAPON_REGISTER( weapon_crossbow );
 
 #ifndef CLIENT_DLL
 
+BEGIN_DATADESC( CWeaponCrossbow )
+
+	DEFINE_FIELD( m_bInZoom,		FIELD_BOOLEAN ),
+	DEFINE_FIELD( m_bMustReload,	FIELD_BOOLEAN ),
+	DEFINE_FIELD( m_nChargeState,	FIELD_INTEGER ),
+	DEFINE_FIELD( m_hChargerSprite,	FIELD_EHANDLE ),
+
+END_DATADESC()
+
+#endif
+
+#ifdef MAPBASE
 acttable_t	CWeaponCrossbow::m_acttable[] = 
 {
-	{ ACT_HL2MP_IDLE,					ACT_HL2MP_IDLE_CROSSBOW,					false },
-	{ ACT_HL2MP_RUN,					ACT_HL2MP_RUN_CROSSBOW,						false },
-	{ ACT_HL2MP_IDLE_CROUCH,			ACT_HL2MP_IDLE_CROUCH_CROSSBOW,				false },
-	{ ACT_HL2MP_WALK_CROUCH,			ACT_HL2MP_WALK_CROUCH_CROSSBOW,				false },
-	{ ACT_HL2MP_GESTURE_RANGE_ATTACK,	ACT_HL2MP_GESTURE_RANGE_ATTACK_CROSSBOW,	false },
-	{ ACT_HL2MP_GESTURE_RELOAD,			ACT_HL2MP_GESTURE_RELOAD_CROSSBOW,			false },
-	{ ACT_HL2MP_JUMP,					ACT_HL2MP_JUMP_CROSSBOW,					false },
+#if EXPANDED_HL2_WEAPON_ACTIVITIES
+	{ ACT_RANGE_ATTACK1,			ACT_RANGE_ATTACK_CROSSBOW,		true },
+	{ ACT_RELOAD,					ACT_RELOAD_CROSSBOW,			true },
+	{ ACT_IDLE,						ACT_IDLE_CROSSBOW,				true },
+	{ ACT_IDLE_ANGRY,				ACT_IDLE_ANGRY_CROSSBOW,		true },
+
+// Readiness activities (not aiming)
+	{ ACT_IDLE_RELAXED,				ACT_IDLE_CROSSBOW_RELAXED,			false },//never aims
+	{ ACT_IDLE_STIMULATED,			ACT_IDLE_CROSSBOW_STIMULATED,		false },
+	{ ACT_IDLE_AGITATED,			ACT_IDLE_ANGRY_CROSSBOW,			false },//always aims
+
+	{ ACT_WALK_RELAXED,				ACT_WALK_CROSSBOW_RELAXED,			false },//never aims
+	{ ACT_WALK_STIMULATED,			ACT_WALK_CROSSBOW_STIMULATED,		false },
+	{ ACT_WALK_AGITATED,			ACT_WALK_AIM_CROSSBOW,				false },//always aims
+
+	{ ACT_RUN_RELAXED,				ACT_RUN_CROSSBOW_RELAXED,			false },//never aims
+	{ ACT_RUN_STIMULATED,			ACT_RUN_CROSSBOW_STIMULATED,		false },
+	{ ACT_RUN_AGITATED,				ACT_RUN_AIM_CROSSBOW,				false },//always aims
+
+// Readiness activities (aiming)
+	{ ACT_IDLE_AIM_RELAXED,			ACT_IDLE_CROSSBOW_RELAXED,			false },//never aims	
+	{ ACT_IDLE_AIM_STIMULATED,		ACT_IDLE_AIM_CROSSBOW_STIMULATED,	false },
+	{ ACT_IDLE_AIM_AGITATED,		ACT_IDLE_ANGRY_CROSSBOW,			false },//always aims
+
+	{ ACT_WALK_AIM_RELAXED,			ACT_WALK_CROSSBOW_RELAXED,			false },//never aims
+	{ ACT_WALK_AIM_STIMULATED,		ACT_WALK_AIM_CROSSBOW_STIMULATED,	false },
+	{ ACT_WALK_AIM_AGITATED,		ACT_WALK_AIM_CROSSBOW,				false },//always aims
+
+	{ ACT_RUN_AIM_RELAXED,			ACT_RUN_CROSSBOW_RELAXED,			false },//never aims
+	{ ACT_RUN_AIM_STIMULATED,		ACT_RUN_AIM_CROSSBOW_STIMULATED,	false },
+	{ ACT_RUN_AIM_AGITATED,			ACT_RUN_AIM_CROSSBOW,				false },//always aims
+//End readiness activities
+
+	{ ACT_WALK,						ACT_WALK_CROSSBOW,				true },
+	{ ACT_WALK_AIM,					ACT_WALK_AIM_CROSSBOW,				true },
+	{ ACT_WALK_CROUCH,				ACT_WALK_CROUCH_RIFLE,				true },
+	{ ACT_WALK_CROUCH_AIM,			ACT_WALK_CROUCH_AIM_RIFLE,			true },
+	{ ACT_RUN,						ACT_RUN_CROSSBOW,					true },
+	{ ACT_RUN_AIM,					ACT_RUN_AIM_CROSSBOW,				true },
+	{ ACT_RUN_CROUCH,				ACT_RUN_CROUCH_RIFLE,				true },
+	{ ACT_RUN_CROUCH_AIM,			ACT_RUN_CROUCH_AIM_RIFLE,			true },
+	{ ACT_GESTURE_RANGE_ATTACK1,	ACT_GESTURE_RANGE_ATTACK_CROSSBOW,	true },
+	{ ACT_RANGE_ATTACK1_LOW,		ACT_RANGE_ATTACK_CROSSBOW_LOW,		true },
+	{ ACT_COVER_LOW,				ACT_COVER_CROSSBOW_LOW,				false },
+	{ ACT_RANGE_AIM_LOW,			ACT_RANGE_AIM_CROSSBOW_LOW,			false },
+	{ ACT_RELOAD_LOW,				ACT_RELOAD_CROSSBOW_LOW,			false },
+	{ ACT_GESTURE_RELOAD,			ACT_GESTURE_RELOAD_CROSSBOW,		true },
+
+	{ ACT_ARM,						ACT_ARM_RIFLE,					false },
+	{ ACT_DISARM,					ACT_DISARM_RIFLE,				false },
+#else
+	{ ACT_RANGE_ATTACK1,			ACT_RANGE_ATTACK_SMG1,			true },
+	{ ACT_RELOAD,					ACT_RELOAD_SMG1,				true },
+	{ ACT_IDLE,						ACT_IDLE_SMG1,					true },
+	{ ACT_IDLE_ANGRY,				ACT_IDLE_ANGRY_SMG1,			true },
+
+	{ ACT_WALK,						ACT_WALK_RIFLE,					true },
+	{ ACT_WALK_AIM,					ACT_WALK_AIM_RIFLE,				true  },
+	
+// Readiness activities (not aiming)
+	{ ACT_IDLE_RELAXED,				ACT_IDLE_SMG1_RELAXED,			false },//never aims
+	{ ACT_IDLE_STIMULATED,			ACT_IDLE_SMG1_STIMULATED,		false },
+	{ ACT_IDLE_AGITATED,			ACT_IDLE_ANGRY_SMG1,			false },//always aims
+
+	{ ACT_WALK_RELAXED,				ACT_WALK_RIFLE_RELAXED,			false },//never aims
+	{ ACT_WALK_STIMULATED,			ACT_WALK_RIFLE_STIMULATED,		false },
+	{ ACT_WALK_AGITATED,			ACT_WALK_AIM_RIFLE,				false },//always aims
+
+	{ ACT_RUN_RELAXED,				ACT_RUN_RIFLE_RELAXED,			false },//never aims
+	{ ACT_RUN_STIMULATED,			ACT_RUN_RIFLE_STIMULATED,		false },
+	{ ACT_RUN_AGITATED,				ACT_RUN_AIM_RIFLE,				false },//always aims
+
+// Readiness activities (aiming)
+	{ ACT_IDLE_AIM_RELAXED,			ACT_IDLE_SMG1_RELAXED,			false },//never aims	
+	{ ACT_IDLE_AIM_STIMULATED,		ACT_IDLE_AIM_RIFLE_STIMULATED,	false },
+	{ ACT_IDLE_AIM_AGITATED,		ACT_IDLE_ANGRY_SMG1,			false },//always aims
+
+	{ ACT_WALK_AIM_RELAXED,			ACT_WALK_RIFLE_RELAXED,			false },//never aims
+	{ ACT_WALK_AIM_STIMULATED,		ACT_WALK_AIM_RIFLE_STIMULATED,	false },
+	{ ACT_WALK_AIM_AGITATED,		ACT_WALK_AIM_RIFLE,				false },//always aims
+
+	{ ACT_RUN_AIM_RELAXED,			ACT_RUN_RIFLE_RELAXED,			false },//never aims
+	{ ACT_RUN_AIM_STIMULATED,		ACT_RUN_AIM_RIFLE_STIMULATED,	false },
+	{ ACT_RUN_AIM_AGITATED,			ACT_RUN_AIM_RIFLE,				false },//always aims
+//End readiness activities
+
+	{ ACT_WALK_AIM,					ACT_WALK_AIM_RIFLE,				true },
+	{ ACT_WALK_CROUCH,				ACT_WALK_CROUCH_RIFLE,			true },
+	{ ACT_WALK_CROUCH_AIM,			ACT_WALK_CROUCH_AIM_RIFLE,		true },
+	{ ACT_RUN,						ACT_RUN_RIFLE,					true },
+	{ ACT_RUN_AIM,					ACT_RUN_AIM_RIFLE,				true },
+	{ ACT_RUN_CROUCH,				ACT_RUN_CROUCH_RIFLE,			true },
+	{ ACT_RUN_CROUCH_AIM,			ACT_RUN_CROUCH_AIM_RIFLE,		true },
+	{ ACT_GESTURE_RANGE_ATTACK1,	ACT_GESTURE_RANGE_ATTACK_SMG1,	true },
+	{ ACT_RANGE_ATTACK1_LOW,		ACT_RANGE_ATTACK_SMG1_LOW,		true },
+	{ ACT_COVER_LOW,				ACT_COVER_SMG1_LOW,				false },
+	{ ACT_RANGE_AIM_LOW,			ACT_RANGE_AIM_SMG1_LOW,			false },
+	{ ACT_RELOAD_LOW,				ACT_RELOAD_SMG1_LOW,			false },
+	{ ACT_GESTURE_RELOAD,			ACT_GESTURE_RELOAD_SMG1,		true },
+#endif
+
+#if EXPANDED_HL2_COVER_ACTIVITIES
+	{ ACT_RANGE_AIM_MED,			ACT_RANGE_AIM_CROSSBOW_MED,			false },
+	{ ACT_RANGE_ATTACK1_MED,		ACT_RANGE_ATTACK_CROSSBOW_MED,		false },
+#endif
+
+#ifdef MAPBASE
+	// HL2:DM activities (for third-person animations in SP)
+	{ ACT_HL2MP_IDLE,                    ACT_HL2MP_IDLE_CROSSBOW,                    false },
+	{ ACT_HL2MP_RUN,                    ACT_HL2MP_RUN_CROSSBOW,                    false },
+	{ ACT_HL2MP_IDLE_CROUCH,            ACT_HL2MP_IDLE_CROUCH_CROSSBOW,            false },
+	{ ACT_HL2MP_WALK_CROUCH,            ACT_HL2MP_WALK_CROUCH_CROSSBOW,            false },
+	{ ACT_HL2MP_GESTURE_RANGE_ATTACK,    ACT_HL2MP_GESTURE_RANGE_ATTACK_CROSSBOW,    false },
+	{ ACT_HL2MP_GESTURE_RELOAD,            ACT_HL2MP_GESTURE_RELOAD_CROSSBOW,        false },
+	{ ACT_HL2MP_JUMP,                    ACT_HL2MP_JUMP_CROSSBOW,                    false },
+#if EXPANDED_HL2DM_ACTIVITIES
+	{ ACT_HL2MP_WALK,					ACT_HL2MP_WALK_CROSSBOW,					false },
+	{ ACT_HL2MP_GESTURE_RANGE_ATTACK2,	ACT_HL2MP_GESTURE_RANGE_ATTACK2_CROSSBOW,    false },
+#endif
+#endif
 };
 
 IMPLEMENT_ACTTABLE(CWeaponCrossbow);
@@ -516,6 +803,13 @@ CWeaponCrossbow::CWeaponCrossbow( void )
 	m_bFiresUnderwater	= true;
 	m_bInZoom			= false;
 	m_bMustReload		= false;
+
+#ifdef MAPBASE
+	m_fMinRange1 = 24;
+	m_fMaxRange1 = 5000;
+	m_fMinRange2 = 24;
+	m_fMaxRange2 = 5000;
+#endif
 }
 
 #define	CROSSBOW_GLOW_SPRITE	"sprites/light_glow02_noz.vmt"
@@ -560,11 +854,16 @@ void CWeaponCrossbow::PrimaryAttack( void )
 
 	SetWeaponIdleTime( gpGlobals->curtime + SequenceDuration( ACT_VM_PRIMARYATTACK ) );
 
-#ifdef GAME_DLL
-	CBasePlayer *player = ToBasePlayer( GetOwner() );
-	if ( player )
-		player->OnMyWeaponFired( this );
+	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
+	if ( pPlayer )
+	{
+#ifdef MAPBASE
+		pPlayer->SetAnimation( PLAYER_ATTACK1 );
 #endif
+#ifdef GAME_DLL
+		pPlayer->OnMyWeaponFired( this );
+#endif
+	}
 }
 
 //-----------------------------------------------------------------------------
@@ -642,7 +941,11 @@ void CWeaponCrossbow::FireBolt( void )
 		else
 		{
 			WeaponSound( EMPTY );
+#ifdef MAPBASE_MP
+			m_flNextPrimaryAttack = gpGlobals->curtime + 0.15f;
+#else
 			m_flNextPrimaryAttack = 0.15;
+#endif
 		}
 
 		return;
@@ -660,6 +963,23 @@ void CWeaponCrossbow::FireBolt( void )
 	QAngle angAiming;
 	VectorAngles( vecAiming, angAiming );
 
+#if defined(HL2_EPISODIC)
+	// !!!HACK - the other piece of the Alyx crossbow bolt hack for Outland_10 (see ::BoltTouch() for more detail)
+	if( FStrEq(STRING(gpGlobals->mapname), "ep2_outland_10") )
+	{
+		trace_t tr;
+		UTIL_TraceLine( vecSrc, vecSrc + vecAiming * 24.0f, MASK_SOLID, pOwner, COLLISION_GROUP_NONE, &tr );
+
+		if( tr.m_pEnt != NULL && tr.m_pEnt->Classify() == CLASS_PLAYER_ALLY_VITAL )
+		{
+			// If Alyx is right in front of the player, make sure the bolt starts outside of the player's BBOX, or the bolt
+			// will instantly collide with the player after the owner of the bolt is switched to Alyx in ::BoltTouch(). We 
+			// avoid this altogether by making it impossible for the bolt to collide with the player.
+			vecSrc += vecAiming * 24.0f;
+		}
+	}
+#endif
+
 	CCrossbowBolt *pBolt = CCrossbowBolt::BoltCreate( vecSrc, angAiming, GetHL2MPWpnData().m_iPlayerDamage, pOwner );
 
 	if ( pOwner->GetWaterLevel() == 3 )
@@ -675,11 +995,18 @@ void CWeaponCrossbow::FireBolt( void )
 
 	m_iClip1--;
 
+#ifdef MAPBASE
+	SetBolt( 1 );
+#endif
+
 	pOwner->ViewPunch( QAngle( -2, 0, 0 ) );
 
 	WeaponSound( SINGLE );
 	WeaponSound( SPECIAL2 );
 
+#ifndef CLIENT_DLL
+	CSoundEnt::InsertSound( SOUND_COMBAT, GetAbsOrigin(), 200, 0.2 );
+#endif
 	SendWeaponAnim( ACT_VM_PRIMARYATTACK );
 
 	if ( !m_iClip1 && pOwner->GetAmmoCount( m_iPrimaryAmmoType ) <= 0 )
@@ -694,6 +1021,85 @@ void CWeaponCrossbow::FireBolt( void )
 	SetChargerState( CHARGER_STATE_DISCHARGE );
 }
 
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+// Purpose: Sets whether or not the bolt is visible
+//-----------------------------------------------------------------------------
+inline void CWeaponCrossbow::SetBolt( int iSetting )
+{
+	int iBody = FindBodygroupByName( "bolt" );
+	if (iBody != -1 /*|| (GetOwner() && GetOwner()->IsPlayer())*/) // TODO: Player models check the viewmodel instead of the worldmodel, but setting the bodygroup regardless can cause a crash, so we need a better solution
+		SetBodygroup( iBody, iSetting );
+	else
+		m_nSkin = iSetting;
+}
+
+#ifndef CLIENT_DLL
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CWeaponCrossbow::FireNPCBolt( CAI_BaseNPC *pOwner, Vector &vecShootOrigin, Vector &vecShootDir )
+{
+	Assert(pOwner);
+
+	QAngle angAiming;
+	VectorAngles( vecShootDir, angAiming );
+
+	CCrossbowBolt *pBolt = CCrossbowBolt::BoltCreate( vecShootOrigin, angAiming, pOwner );
+
+	if ( pOwner->GetWaterLevel() == 3 )
+	{
+		pBolt->SetAbsVelocity( vecShootDir * BOLT_WATER_VELOCITY );
+	}
+	else
+	{
+		pBolt->SetAbsVelocity( vecShootDir * BOLT_AIR_VELOCITY );
+	}
+
+	m_iClip1--;
+
+	SetBolt( 1 );
+
+	WeaponSound( SINGLE_NPC );
+	WeaponSound( SPECIAL2 );
+
+	CSoundEnt::InsertSound( SOUND_COMBAT, GetAbsOrigin(), 200, 0.2 );
+
+	m_flNextPrimaryAttack = m_flNextSecondaryAttack	= gpGlobals->curtime + 2.5f;
+
+	SetSkin( BOLT_SKIN_GLOW );
+	SetChargerState( CHARGER_STATE_DISCHARGE );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CWeaponCrossbow::Reload_NPC( bool bPlaySound )
+{
+	BaseClass::Reload_NPC( bPlaySound );
+
+	SetBolt( 0 );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CWeaponCrossbow::Operator_ForceNPCFire( CBaseCombatCharacter *pOperator, bool bSecondary )
+{
+	// Ensure we have enough rounds in the clip
+	m_iClip1++;
+
+	Vector vecShootOrigin, vecShootDir;
+	QAngle	angShootDir;
+	GetAttachment( LookupAttachment( "muzzle" ), vecShootOrigin, angShootDir );
+	AngleVectors( angShootDir, &vecShootDir );
+	FireNPCBolt( pOperator->MyNPCPointer(), vecShootOrigin, vecShootDir );
+
+	//m_bMustReload = true;
+}
+#endif
+#endif
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Output : Returns true on success, false on failure.
@@ -702,10 +1108,17 @@ bool CWeaponCrossbow::Deploy( void )
 {
 	if ( m_iClip1 <= 0 )
 	{
+#ifdef MAPBASE
+		SetBolt( 1 );
+#endif
 		return DefaultDeploy( (char*)GetViewModel(), (char*)GetWorldModel(), ACT_CROSSBOW_DRAW_UNLOADED, (char*)GetAnimPrefix() );
 	}
 
 	SetSkin( BOLT_SKIN_GLOW );
+
+#ifdef MAPBASE
+	SetBolt( 0 );
+#endif
 
 	return BaseClass::Deploy();
 }
@@ -766,7 +1179,11 @@ void CWeaponCrossbow::CreateChargerEffects( void )
 #ifndef CLIENT_DLL
 	CBasePlayer *pOwner = ToBasePlayer( GetOwner() );
 
+#ifdef MAPBASE
+	if ( m_hChargerSprite != NULL || pOwner == NULL )
+#else
 	if ( m_hChargerSprite != NULL )
+#endif
 		return;
 
 	m_hChargerSprite = CSprite::SpriteCreate( CROSSBOW_GLOW_SPRITE, GetAbsOrigin(), false );
@@ -868,6 +1285,10 @@ void CWeaponCrossbow::SetChargerState( ChargerState_t state )
 		
 		// Shoot some sparks and draw a beam between the two outer points
 		DoLoadEffect();
+
+#ifdef MAPBASE
+		SetBolt( 0 );
+#endif
 		
 		break;
 #ifndef CLIENT_DLL
@@ -928,7 +1349,6 @@ void CWeaponCrossbow::SetChargerState( ChargerState_t state )
 	}
 }
 
-#ifndef CLIENT_DLL
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Input  : *pEvent - 
@@ -953,13 +1373,26 @@ void CWeaponCrossbow::Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombat
 		SetChargerState( CHARGER_STATE_READY );
 		break;
 
+#if defined(MAPBASE) && !defined(CLIENT_DLL)
+	case EVENT_WEAPON_SMG1:
+		{
+			CAI_BaseNPC *pNPC = pOperator->MyNPCPointer();
+			Assert(pNPC);
+
+			Vector vecSrc = pNPC->Weapon_ShootPosition();
+			Vector vecAiming = pNPC->GetActualShootTrajectory( vecSrc );
+
+			FireNPCBolt( pNPC, vecSrc, vecAiming );
+			//m_bMustReload = true;
+		}
+		break;
+#endif
+
 	default:
 		BaseClass::Operator_HandleAnimEvent( pEvent, pOperator );
 		break;
 	}
 }
-
-#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: Set the desired activity for the weapon and its viewmodel counterpart

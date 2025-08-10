@@ -45,6 +45,10 @@ public:
 	// utility function
 	static void DoMachineGunKick( CBasePlayer *pPlayer, float dampEasy, float maxVerticleKickAngle, float fireDurationTime, float slideLimitTime );
 
+#if defined(MAPBASE_MP) && !defined(CLIENT_DLL)
+	virtual int		WeaponRangeAttack1Condition( float flDot, float flDist );
+#endif
+
 private:
 	
 	CHL2MPMachineGun( const CHL2MPMachineGun & );

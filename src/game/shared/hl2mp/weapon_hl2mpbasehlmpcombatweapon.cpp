@@ -12,6 +12,10 @@
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
 
+#ifdef MAPBASE
+ConVar	hl2mp_allow_weapon_lower( "hl2mp_allow_weapon_lower", "0", FCVAR_REPLICATED );
+#endif
+
 LINK_ENTITY_TO_CLASS( basehl2mpcombatweapon, CBaseHL2MPCombatWeapon );
 
 IMPLEMENT_NETWORKCLASS_ALIASED( BaseHL2MPCombatWeapon , DT_BaseHL2MPCombatWeapon )
@@ -80,6 +84,20 @@ void CBaseHL2MPCombatWeapon::ItemHolsterFrame( void )
 		FinishReload();
 		m_flHolsterTime = gpGlobals->curtime;
 	}
+}
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+bool CBaseHL2MPCombatWeapon::CanLower()
+{
+#ifdef MAPBASE
+	if ( !hl2mp_allow_weapon_lower.GetBool() )
+		return BaseClass::CanLower();
+#endif
+
+	if ( SelectWeightedSequence( ACT_VM_IDLE_LOWERED ) == ACTIVITY_NOT_AVAILABLE )
+		return false;
+	return true;
 }
 
 //-----------------------------------------------------------------------------
@@ -308,6 +326,14 @@ float CBaseHL2MPCombatWeapon::CalcViewmodelBob( void )
 	g_lateralBob = speed*0.005f;
 	g_lateralBob = g_lateralBob*0.3 + g_lateralBob*0.7*sin(cycle);
 	g_lateralBob = clamp( g_lateralBob, -7.0f, 4.0f );
+
+#ifdef MAPBASE
+	if (GetBobScale() != 1.0f)
+	{
+		//g_verticalBob *= GetBobScale();
+		g_lateralBob *= GetBobScale();
+	}
+#endif
 	
 	//NOTENOTE: We don't use this return value in our case (need to restructure the calculation function setup!)
 	return 0.0f;

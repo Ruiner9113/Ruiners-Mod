@@ -10,6 +10,10 @@
 #include "takedamageinfo.h"
 #include "ammodef.h"
 #include "hl2mp_gamerules.h"
+#ifdef MAPBASE
+#include "mapbase/protagonist_system.h"
+#include "eventlist.h"
+#endif
 
 
 #ifdef CLIENT_DLL
@@ -292,6 +296,68 @@ void CWeaponHL2MPBase::FireBullets( const FireBulletsInfo_t &info )
 	BaseClass::FireBullets( modinfo );
 }
 
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+const char *CWeaponHL2MPBase::GetViewModel( int viewmodelindex ) const
+{
+	if (GetOwner() && GetOwner()->IsPlayer() && viewmodelindex == 0)
+	{
+		const char *pszProtagVM = g_ProtagonistSystem.GetProtagonist_ViewModel( static_cast<CBasePlayer *>(GetOwner()), this );
+		if (pszProtagVM)
+			return pszProtagVM;
+	}
+
+	return BaseClass::GetViewModel( viewmodelindex );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+float CWeaponHL2MPBase::GetViewmodelFOVOverride() const
+{
+	if (GetOwner() && GetOwner()->IsPlayer())
+	{
+		float *flVMFOV = g_ProtagonistSystem.GetProtagonist_ViewModelFOV( static_cast<CBasePlayer *>(GetOwner()), this );
+		if (flVMFOV)
+			return *flVMFOV;
+	}
+
+	return BaseClass::GetViewmodelFOVOverride();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+bool CWeaponHL2MPBase::UsesHands() const
+{
+	if (GetOwner() && GetOwner()->IsPlayer())
+	{
+		bool *bProtagUsesHands = g_ProtagonistSystem.GetProtagonist_UsesHands( static_cast<CBasePlayer *>(GetOwner()), this );
+		if (bProtagUsesHands)
+			return *bProtagUsesHands;
+	}
+
+	return BaseClass::UsesHands();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+int CWeaponHL2MPBase::GetHandRig() const
+{
+	if (GetOwner() && GetOwner()->IsPlayer())
+	{
+		int *nProtagHandRig = g_ProtagonistSystem.GetProtagonist_HandRig( static_cast<CBasePlayer *>(GetOwner()), this );
+		if (nProtagHandRig)
+			return *nProtagHandRig;
+	}
+
+	return BaseClass::GetHandRig();
+}
+#endif
+
 
 #if defined( CLIENT_DLL )
 
@@ -299,9 +365,60 @@ void CWeaponHL2MPBase::FireBullets( const FireBulletsInfo_t &info )
 
 #define NUM_MUZZLE_FLASH_TYPES 4
 
+#ifdef MAPBASE_MP
+//-----------------------------------------------------------------------------
+// Purpose: 
+// Input  : *pEvent - 
+//			*pOperator - 
+//-----------------------------------------------------------------------------
+void CWeaponHL2MPBase::Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator )
+{
+	if ( (pEvent->type & AE_TYPE_NEWEVENTSYSTEM) && (pEvent->type & AE_TYPE_CLIENT) )
+	{
+		/*if ( pEvent->event == AE_NPC_WEAPON_FIRE )
+		{
+			bool bSecondary = (atoi( pEvent->options ) != 0);
+			Operator_ForceNPCFire( pOperator, bSecondary );
+			return;
+		}
+		else*/ if ( pEvent->event == AE_WPN_PLAYWPNSOUND )
+		{
+			int iSnd = GetWeaponSoundFromString(pEvent->options);
+			if ( iSnd != -1 )
+			{
+				WeaponSound( (WeaponSound_t)iSnd );
+			}
+		}
+	}
+
+	//DevWarning( 2, "Unhandled animation event %d from %s --> %s\n", pEvent->event, pOperator->GetClassname(), GetClassname() );
+}
+#endif
+
 bool CWeaponHL2MPBase::OnFireEvent( C_BaseViewModel *pViewModel, const Vector& origin, const QAngle& angles, int event, const char *options )
 {
+#ifdef MAPBASE_MP
+	bool bBase = BaseClass::OnFireEvent( pViewModel, origin, angles, event, options );
+
+	if (!bBase)
+	{
+		//If the player is receiving this message, pass it through
+		C_BasePlayer *pOwner = ToBasePlayer( GetOwner() );
+
+		if ( pOwner != NULL )
+		{
+			animevent_t animEvent;
+			animEvent.event = event;
+			animEvent.options = options;
+			Operator_HandleAnimEvent( &animEvent, pOwner );
+			return true;
+		}
+	}
+
+	return bBase;
+#else
 	return BaseClass::OnFireEvent( pViewModel, origin, angles, event, options );
+#endif
 }
 
 

@@ -237,6 +237,75 @@ void CBaseCombatCharacter::InputSetBloodColor( inputdata_t &inputdata )
 }
 #endif
 
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+static Activity Weapon_BackupActivityFromList( CBaseCombatCharacter *pBCC, acttable_t *pTable, int actCount, Activity activity, bool weaponTranslationWasRequired, CBaseCombatWeapon *pWeapon )
+{
+	int i = 0;
+	for ( ; i < actCount; i++, pTable++ )
+	{
+		if ( activity == pTable->baseAct )
+		{
+			// Don't pick backup activities we don't actually have an animation for.
+			if (!pBCC->GetModelPtr()->HaveSequenceForActivity(pTable->weaponAct))
+				break;
+
+			return (Activity)pTable->weaponAct;
+		}
+	}
+
+	// We didn't succeed in finding an activity. See if we can recurse
+	acttable_t *pBackupTable = CBaseCombatWeapon::GetDefaultBackupActivityList( pTable - i, actCount );
+	if (pBackupTable)
+	{
+		return Weapon_BackupActivityFromList( pBCC, pBackupTable, actCount, activity, weaponTranslationWasRequired, pWeapon );
+	}
+
+	return activity;
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:	Uses an activity from a different weapon when the activity we were originally looking for does not exist on this character.
+//			This gives NPCs and players the ability to use weapons they are otherwise unable to use.
+//-----------------------------------------------------------------------------
+Activity CBaseCombatCharacter::Weapon_BackupActivity( Activity activity, bool weaponTranslationWasRequired, CBaseCombatWeapon *pSpecificWeapon )
+{
+	CBaseCombatWeapon *pWeapon = pSpecificWeapon ? pSpecificWeapon : GetActiveWeapon();
+	if (!pWeapon)
+		return activity;
+
+	// Make sure the weapon allows this activity to have a backup.
+	if (!pWeapon->SupportsBackupActivity(activity))
+		return activity;
+
+	// UNDONE: Sometimes, a NPC is supposed to use the default activity. Return that if the weapon translation was "not required" and we have an original activity.
+	/*
+	if (!weaponTranslationWasRequired && GetModelPtr()->HaveSequenceForActivity(activity) && !IsPlayer())
+	{
+		return activity;
+	}
+	*/
+
+	acttable_t *pTable = pWeapon->GetBackupActivityList();
+	int actCount = pWeapon->GetBackupActivityListCount();
+	if (!pTable)
+	{
+		// Look for a default list
+		acttable_t *pDefaultTable = pWeapon->ActivityList( actCount );
+		pTable = CBaseCombatWeapon::GetDefaultBackupActivityList( pDefaultTable, actCount );
+	}
+
+	if (pTable && GetModelPtr())
+	{
+		return Weapon_BackupActivityFromList( this, pTable, actCount, activity, weaponTranslationWasRequired, pWeapon );
+	}
+
+	return activity;
+}
+#endif
+
 //-----------------------------------------------------------------------------
 /**
 	The main visibility check.  Checks all the entity specific reasons that could 

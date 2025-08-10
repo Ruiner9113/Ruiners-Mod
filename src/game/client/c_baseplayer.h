@@ -131,6 +131,10 @@ public:
 	virtual Vector			Weapon_ShootPosition();
 	virtual void			Weapon_DropPrimary( void ) {}
 
+#ifdef MAPBASE
+	virtual Activity		Weapon_TranslateActivity( Activity baseAct, bool *pRequired = NULL );
+#endif
+
 	virtual Vector			GetAutoaimVector( float flScale );
 	void					SetSuitUpdate(const char *name, int fgroup, int iNoRepeat);
 

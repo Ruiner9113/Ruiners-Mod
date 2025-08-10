@@ -10,6 +10,9 @@
 	#include "c_hl2mp_player.h"
 #else
 	#include "hl2mp_player.h"
+	#ifdef MAPBASE
+	#include "ai_basenpc.h"
+	#endif
 #endif
 
 #include "weapon_hl2mpbase_machinegun.h"
@@ -109,6 +112,10 @@ void CHL2MPMachineGun::PrimaryAttack( void )
 
 	//Factor in the view kick
 	AddViewKick();
+
+#if defined(MAPBASE_MP) && !defined(CLIENT_DLL)
+	CSoundEnt::InsertSound( SOUND_COMBAT, GetAbsOrigin(), SOUNDENT_VOLUME_MACHINEGUN, 0.2, pPlayer, SOUNDENT_CHANNEL_WEAPON );
+#endif
 	
 	if (!m_iClip1 && pPlayer->GetAmmoCount(m_iPrimaryAmmoType) <= 0)
 	{
@@ -118,6 +125,11 @@ void CHL2MPMachineGun::PrimaryAttack( void )
 
 	SendWeaponAnim( GetPrimaryAttackActivity() );
 	pPlayer->SetAnimation( PLAYER_ATTACK1 );
+
+#if defined(MAPBASE_MP) && !defined(CLIENT_DLL)
+	// Register a muzzleflash for the AI
+	pPlayer->SetMuzzleFlashTime( gpGlobals->curtime + 0.5 );
+#endif
 }
 
 //-----------------------------------------------------------------------------
@@ -131,6 +143,33 @@ void CHL2MPMachineGun::FireBullets( const FireBulletsInfo_t &info )
 		pPlayer->FireBullets(info);
 	}
 }
+
+#if defined(MAPBASE_MP) && !defined(CLIENT_DLL)
+//-----------------------------------------------------------------------------
+// Purpose: Weapon firing conditions
+//-----------------------------------------------------------------------------
+int CHL2MPMachineGun::WeaponRangeAttack1Condition( float flDot, float flDist )
+{
+	if ( m_iClip1 <=0 )
+	{
+		return COND_NO_PRIMARY_AMMO;
+	}
+	else if ( flDist < m_fMinRange1 ) 
+	{
+		return COND_TOO_CLOSE_TO_ATTACK;
+	}
+	else if ( flDist > m_fMaxRange1 )
+	{
+		return COND_TOO_FAR_TO_ATTACK;
+	}
+	else if ( flDot < 0.5f )	// UNDONE: Why check this here? Isn't the AI checking this already?
+	{
+		return COND_NOT_FACING_ATTACK;
+	}
+
+	return COND_CAN_RANGE_ATTACK1;
+}
+#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 

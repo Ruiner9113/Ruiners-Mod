@@ -66,20 +66,8 @@ LINK_ENTITY_TO_CLASS( weapon_stunstick, CWeaponStunStick );
 PRECACHE_WEAPON_REGISTER( weapon_stunstick );
 
 
-#ifndef CLIENT_DLL
-
 acttable_t	CWeaponStunStick::m_acttable[] = 
 {
-#ifdef HL2MP
-	{ ACT_RANGE_ATTACK1,				ACT_RANGE_ATTACK_SLAM, true },
-	{ ACT_HL2MP_IDLE,					ACT_HL2MP_IDLE_MELEE,					false },
-	{ ACT_HL2MP_RUN,					ACT_HL2MP_RUN_MELEE,					false },
-	{ ACT_HL2MP_IDLE_CROUCH,			ACT_HL2MP_IDLE_CROUCH_MELEE,			false },
-	{ ACT_HL2MP_WALK_CROUCH,			ACT_HL2MP_WALK_CROUCH_MELEE,			false },
-	{ ACT_HL2MP_GESTURE_RANGE_ATTACK,	ACT_HL2MP_GESTURE_RANGE_ATTACK_MELEE,	false },
-	{ ACT_HL2MP_GESTURE_RELOAD,			ACT_HL2MP_GESTURE_RELOAD_MELEE,			false },
-	{ ACT_HL2MP_JUMP,					ACT_HL2MP_JUMP_MELEE,					false },
-#endif
 	{ ACT_MELEE_ATTACK1,				ACT_MELEE_ATTACK_SWING,	true },
 	{ ACT_IDLE_ANGRY,					ACT_IDLE_ANGRY_MELEE,	true },
 #if EXPANDED_HL2_WEAPON_ACTIVITIES
@@ -106,8 +94,6 @@ acttable_t	CWeaponStunStick::m_acttable[] =
 };
 
 IMPLEMENT_ACTTABLE(CWeaponStunStick);
-
-#endif
 
 
 //-----------------------------------------------------------------------------
@@ -410,11 +396,31 @@ void CWeaponStunStick::SetStunState( bool state )
 
 		//FIXME: END - Move to client-side
 
-		EmitSound( "Weapon_StunStick.Activate" );
+#ifdef MAPBASE
+		// Support for weapon sound alternative
+		if (*GetShootSound( SPECIAL1 ))
+		{
+			WeaponSound( SPECIAL1 );
+		}
+		else
+#endif
+		{
+			EmitSound( "Weapon_StunStick.Activate" );
+		}
 	}
 	else
 	{
-		EmitSound( "Weapon_StunStick.Deactivate" );
+#ifdef MAPBASE
+		// Support for weapon sound alternative
+		if (*GetShootSound( SPECIAL2 ))
+		{
+			WeaponSound( SPECIAL2 );
+		}
+		else
+#endif
+		{
+			EmitSound( "Weapon_StunStick.Deactivate" );
+		}
 	}
 }
 
@@ -424,9 +430,12 @@ void CWeaponStunStick::SetStunState( bool state )
 //-----------------------------------------------------------------------------
 bool CWeaponStunStick::Deploy( void )
 {
+	if ( BaseClass::Deploy() == false )
+		return false;
+
 	SetStunState( true );
 
-	return BaseClass::Deploy();
+	return true;
 }
 
 //-----------------------------------------------------------------------------

@@ -109,6 +109,25 @@ void C_BaseCombatCharacter::DoMuzzleFlash()
 	}
 }
 
+#ifdef MAPBASE
+// UNDONE: Should these operate on a list of weapon/items
+Activity C_BaseCombatCharacter::Weapon_TranslateActivity( Activity baseAct, bool *pRequired )
+{
+	Activity translated = baseAct;
+
+	if ( m_hActiveWeapon )
+	{
+		translated = m_hActiveWeapon->ActivityOverride( baseAct, pRequired );
+	}
+	else if (pRequired)
+	{
+		*pRequired = false;
+	}
+
+	return translated;
+}
+#endif
+
 #ifdef GLOWS_ENABLE
 //-----------------------------------------------------------------------------
 // Purpose: 

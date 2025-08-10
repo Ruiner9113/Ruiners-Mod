@@ -875,6 +875,41 @@ void CBasePlayer::SelectLastItem(void)
 }
 
 
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+Activity CBasePlayer::Weapon_TranslateActivity( Activity baseAct, bool *pRequired )
+{
+	Activity weaponTranslation = BaseClass::Weapon_TranslateActivity( baseAct, pRequired );
+	
+#ifdef CLIENT_DLL
+	// Since other players' weapons have invisible viewmodels
+	bool bWeaponNotVisible = (GetActiveWeapon() && GetActiveWeapon()->IsEffectActive( EF_NODRAW )) ? true : false;
+#else
+	bool bWeaponNotVisible = (GetActiveWeapon() && !GetActiveWeapon()->IsWeaponVisible()) ? true : false;
+#endif
+	
+	if ( bWeaponNotVisible && baseAct != ACT_ARM )
+	{
+		// Our weapon is holstered. Use the base activity.
+		return baseAct;
+	}
+	if ( GetModelPtr() && (!GetModelPtr()->HaveSequenceForActivity(weaponTranslation) || baseAct == weaponTranslation) )
+	{
+		// This is used so players can fall back to backup activities in the same way NPCs in Mapbase can
+		Activity backupActivity = Weapon_BackupActivity(baseAct, pRequired ? *pRequired : false);
+		if ( baseAct != backupActivity && GetModelPtr()->HaveSequenceForActivity(backupActivity) )
+			return backupActivity;
+
+		return baseAct;
+	}
+
+	return weaponTranslation;
+}
+#endif
+
+
 //-----------------------------------------------------------------------------
 // Purpose: Abort any reloads we're in
 //-----------------------------------------------------------------------------

@@ -104,8 +104,9 @@ BEGIN_DATADESC( CWeapon_SLAM )
 	DEFINE_FUNCTION( SlamTouch ),
 
 END_DATADESC()
+#endif
 
-acttable_t	CWeapon_SLAM::m_acttable[] = 
+acttable_t	CWeapon_SLAM::m_acttable[] =
 {
 	{ ACT_RANGE_ATTACK1, ACT_RANGE_ATTACK_SLAM, true },
 	{ ACT_HL2MP_IDLE,					ACT_HL2MP_IDLE_SLAM,					false },
@@ -121,8 +122,7 @@ acttable_t	CWeapon_SLAM::m_acttable[] =
 #endif
 };
 
-IMPLEMENT_ACTTABLE(CWeapon_SLAM);
-#endif
+IMPLEMENT_ACTTABLE( CWeapon_SLAM );
 
 
 void CWeapon_SLAM::Spawn( )
@@ -495,12 +495,12 @@ void CWeapon_SLAM::StartTripmineAttach( void )
 //-----------------------------------------------------------------------------
 void CWeapon_SLAM::SatchelThrow( void )
 {	
-#ifndef CLIENT_DLL
 	m_bThrowSatchel = false;
 
 	// Only the player fires this way so we can cast
 	CBasePlayer *pPlayer = ToBasePlayer( GetOwner() );
 
+#ifndef CLIENT_DLL
 	Vector vecSrc	 = pPlayer->WorldSpaceCenter();
 	Vector vecFacing = pPlayer->BodyDirection3D( );
 	vecSrc = vecSrc + vecFacing * 18.0;
@@ -529,11 +529,10 @@ void CWeapon_SLAM::SatchelThrow( void )
 		pSatchel->m_bIsLive = true;
 		pSatchel->m_pMyWeaponSLAM = this;
 	}
+#endif
 
 	pPlayer->RemoveAmmo( 1, m_iSecondaryAmmoType );
 	pPlayer->SetAnimation( PLAYER_ATTACK1 );
-
-#endif
 
 	// Play throw sound
 	EmitSound( "Weapon_SLAM.SatchelThrow" );
@@ -577,7 +576,6 @@ void CWeapon_SLAM::StartSatchelThrow( void )
 //-----------------------------------------------------------------------------
 void CWeapon_SLAM::SatchelAttach( void )
 {
-#ifndef CLIENT_DLL
 	CBaseCombatCharacter *pOwner  = GetOwner();
 	if (!pOwner)
 	{
@@ -585,7 +583,8 @@ void CWeapon_SLAM::SatchelAttach( void )
 	}
 
 	m_bAttachSatchel = false;
-
+	
+#ifndef CLIENT_DLL
 	Vector vecSrc	 = pOwner->Weapon_ShootPosition( );
 	Vector vecAiming = pOwner->BodyDirection2D( );
 
@@ -625,15 +624,24 @@ void CWeapon_SLAM::SatchelAttach( void )
 //-----------------------------------------------------------------------------
 void CWeapon_SLAM::StartSatchelAttach( void )
 {
-#ifndef CLIENT_DLL
+#if !defined(CLIENT_DLL) || defined(MAPBASE_MP)
 	CBaseCombatCharacter *pOwner  = GetOwner();
 	if (!pOwner)
 	{
 		return;
 	}
 
+#ifdef CLIENT_DLL
+	Vector vecAiming;
+
+	// Must compromise due to no body direction or Weapon_ShootPosition() on client
+	QAngle angEyeAngles = pOwner->EyeAngles();
+	AngleVectors( angEyeAngles, &vecAiming );
+	Vector vecSrc = Vector( 0, 32, 0 );
+#else
 	Vector vecSrc	 = pOwner->Weapon_ShootPosition( );
 	Vector vecAiming = pOwner->BodyDirection2D( );
+#endif
 
 	trace_t tr;
 
