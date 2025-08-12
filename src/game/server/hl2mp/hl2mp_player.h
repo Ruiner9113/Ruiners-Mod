@@ -20,6 +20,10 @@ class CHL2MP_Player;
 #include "hl2mp_gamerules.h"
 #include "utldict.h"
 
+#ifdef MAPBASE
+#define HL2MP_PLAYER_USES_RESPONSE_SYSTEM 1
+#endif
+
 //=============================================================================
 // >> HL2MP_Player
 //=============================================================================

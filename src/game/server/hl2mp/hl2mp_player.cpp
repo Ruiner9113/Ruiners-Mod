@@ -1488,6 +1488,10 @@ void CHL2MP_Player::DeathSound( const CTakeDamageInfo &info )
 	if ( m_hRagdoll && m_hRagdoll->GetBaseAnimating()->IsDissolving() )
 		 return;
 
+#ifdef HL2MP_PLAYER_USES_RESPONSE_SYSTEM
+	// This corresponds to the concept used by HL2 NPCs and should work seamlessly with default HL2 response scripts
+	Speak( "TLK_DEATH" );
+#else
 	char szStepSound[128];
 
 	Q_snprintf( szStepSound, sizeof( szStepSound ), "%s.Die", GetPlayerModelSoundPrefix() );
@@ -1513,6 +1517,7 @@ void CHL2MP_Player::DeathSound( const CTakeDamageInfo &info )
 	ep.m_pOrigin = &vecOrigin;
 
 	EmitSound( filter, entindex(), ep );
+#endif
 }
 
 CBaseEntity* CHL2MP_Player::EntSelectSpawnPoint( void )
