@@ -71,6 +71,9 @@ public:
 #endif
 
 #ifdef SP_ANIM_STATE
+	void	SetAnimation( PLAYER_ANIM playerAnim );
+	void	AddAnimStateLayer( int iSequence, float flBlendIn, float flBlendOut, float flPlaybackRate, bool bHoldAtEnd, bool bOnlyWhenStill );
+
 	virtual const Vector&	GetRenderOrigin();
 	virtual const QAngle&	GetRenderAngles( void );
 	virtual CStudioHdr		*OnNewModel();

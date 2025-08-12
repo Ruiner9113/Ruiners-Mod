@@ -143,7 +143,10 @@ const char *g_ppszRandomCombineModels[] =
 
 #pragma warning( disable : 4355 )
 
-CHL2MP_Player::CHL2MP_Player() : m_PlayerAnimState( this )
+CHL2MP_Player::CHL2MP_Player()
+#ifndef SP_ANIM_STATE
+	: m_PlayerAnimState( this )
+#endif
 {
 	m_angEyeAngles.Init();
 
@@ -643,7 +646,9 @@ void CHL2MP_Player::PostThink( void )
 		SetCollisionBounds( VEC_CROUCH_TRACE_MIN, VEC_CROUCH_TRACE_MAX );
 	}
 
+#ifndef SP_ANIM_STATE
 	m_PlayerAnimState.Update();
+#endif
 
 	// Store the eye angles pitch so the client can compute its animation state correctly.
 	m_angEyeAngles = EyeAngles();
@@ -762,6 +767,11 @@ extern ConVar hl2_normspeed;
 // Set the activity based on an event or current state
 void CHL2MP_Player::SetAnimation( PLAYER_ANIM playerAnim )
 {
+#ifdef SP_ANIM_STATE
+	BaseClass::SetAnimation( playerAnim );
+	return;
+#endif
+
 	int animDesired;
 
 	float speed;
@@ -1332,9 +1342,14 @@ void CHL2MP_Player::Event_Killed( const CTakeDamageInfo &info )
 
 	SetNumAnimOverlays( 0 );
 
-	// Note: since we're dead, it won't draw us on the client, but we don't set EF_NODRAW
-	// because we still want to transmit to the clients in our PVS.
-	CreateRagdollEntity();
+#ifdef MAPBASE_MP
+	if ( !m_bForceServerRagdoll )
+#endif
+	{
+		// Note: since we're dead, it won't draw us on the client, but we don't set EF_NODRAW
+		// because we still want to transmit to the clients in our PVS.
+		CreateRagdollEntity();
+	}
 
 	DetonateTripmines();
 

@@ -99,6 +99,10 @@ public:
 	void SetPlayerModel( void );
 	void SetPlayerTeamModel( void );
 	Activity TranslateTeamActivity( Activity ActToTranslate );
+
+#ifdef SP_ANIM_STATE
+	Activity Weapon_TranslateActivity( Activity baseAct, bool *pRequired = NULL );
+#endif
 	
 	float GetNextModelChangeTime( void ) { return m_flNextModelChangeTime; }
 	float GetNextTeamChangeTime( void ) { return m_flNextTeamChangeTime; }
@@ -159,7 +163,9 @@ public:
 private:
 
 	CNetworkQAngle( m_angEyeAngles );
+#ifndef SP_ANIM_STATE
 	CPlayerAnimState   m_PlayerAnimState;
+#endif
 
 	int m_iLastWeaponFireUsercmd;
 	int m_iModelType;

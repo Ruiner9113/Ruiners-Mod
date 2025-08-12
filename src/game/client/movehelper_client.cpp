@@ -310,6 +310,11 @@ bool CMoveHelperClient::PlayerFallingDamage(void)
 void CMoveHelperClient::PlayerSetAnimation( PLAYER_ANIM eAnim )
 {
 	 // Do nothing on the client. Animations are set on the server.
+#ifdef MAPBASE_MP
+	// The Mapbase anim state uses clientside anims as well
+	if ( m_pHost )
+		m_pHost->SetAnimation( eAnim );
+#endif
 }
 
 bool CMoveHelperClient::IsWorldEntity( const CBaseHandle &handle )

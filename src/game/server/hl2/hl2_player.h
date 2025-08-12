@@ -132,7 +132,9 @@ public:
 	// For the logic_playerproxy output
 	void				SpawnedAtPoint( CBaseEntity *pSpawnPoint );
 
+#ifndef MAPBASE_MP
 	Activity			Weapon_TranslateActivity( Activity baseAct, bool *pRequired = NULL );
+#endif
 
 #ifdef SP_ANIM_STATE
 	void				SetAnimation( PLAYER_ANIM playerAnim );

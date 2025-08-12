@@ -67,7 +67,9 @@ public:
 	// Should this object cast shadows?
 	virtual ShadowType_t		ShadowCastType( void );
 	virtual C_BaseAnimating *BecomeRagdollOnClient();
+#ifndef SP_ANIM_STATE
 	virtual const QAngle& GetRenderAngles();
+#endif
 	virtual bool ShouldDraw( void );
 	virtual void OnDataChanged( DataUpdateType_t type );
 	virtual float GetFOV( void );
@@ -118,13 +120,19 @@ public:
 	void StopWalking( void );
 	bool IsWalking( void ) { return m_fIsWalking; }
 
+#ifdef SP_ANIM_STATE
+	Activity Weapon_TranslateActivity( Activity baseAct, bool *pRequired = NULL );
+#endif
+
 	virtual void PostThink( void );
 
 private:
 	
 	C_HL2MP_Player( const C_HL2MP_Player & );
 
+#ifndef SP_ANIM_STATE
 	CPlayerAnimState m_PlayerAnimState;
+#endif
 
 	QAngle	m_angEyeAngles;
 

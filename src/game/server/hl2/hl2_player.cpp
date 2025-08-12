@@ -1480,6 +1480,7 @@ void CHL2_Player::SpawnedAtPoint( CBaseEntity *pSpawnPoint )
 
 //-----------------------------------------------------------------------------
 
+#ifndef MAPBASE_MP // See hl2mp_player_shared.cpp
 ConVar player_use_anim_enabled( "player_use_anim_enabled", "1" );
 ConVar player_use_anim_heavy_mass( "player_use_anim_heavy_mass", "20.0" );
 
@@ -1529,6 +1530,7 @@ Activity CHL2_Player::Weapon_TranslateActivity( Activity baseAct, bool *pRequire
 
 	return weaponTranslation;
 }
+#endif
 
 #ifdef SP_ANIM_STATE
 // Set the activity based on an event or current state

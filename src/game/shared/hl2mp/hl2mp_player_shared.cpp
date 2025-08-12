@@ -14,6 +14,10 @@
 #else
 #include "hl2mp_player.h"
 #endif
+#ifdef MAPBASE
+#include "weapon_physcannon.h"
+#include "hl2mp_gamerules.h"
+#endif
 
 #include "engine/IEngineSound.h"
 #include "SoundEmitterSystem/isoundemittersystembase.h"
@@ -126,7 +130,57 @@ void CHL2MP_Player::PlayStepSound( Vector &vecOrigin, surfacedata_t *psurface, f
 // ANIMATION CODE
 //==========================
 
+#ifdef SP_ANIM_STATE
+ConVar player_use_anim_enabled( "player_use_anim_enabled", "1", FCVAR_REPLICATED );
 
+const float PLAYER_USE_ANIM_HEAVY_MASS = 20.0f;
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+Activity CHL2MP_Player::Weapon_TranslateActivity( Activity baseAct, bool *pRequired )
+{
+	Activity weaponTranslation = BaseClass::Weapon_TranslateActivity( baseAct, pRequired );
+	
+#if EXPANDED_HL2DM_ACTIVITIES
+	// +USE activities
+	if ( GetUseEntity() && player_use_anim_enabled.GetBool())
+	{
+		CBaseEntity* pHeldEnt = GetPlayerHeldEntity( this );
+		float flMass = pHeldEnt ?
+			(pHeldEnt->VPhysicsGetObject() ? PlayerPickupGetHeldObjectMass( GetUseEntity(), pHeldEnt->VPhysicsGetObject() ) : PLAYER_USE_ANIM_HEAVY_MASS) :
+			(GetUseEntity()->VPhysicsGetObject() ? GetUseEntity()->VPhysicsGetObject()->GetMass() : PLAYER_USE_ANIM_HEAVY_MASS);
+		if ( flMass >= PLAYER_USE_ANIM_HEAVY_MASS)
+		{
+			// Heavy versions
+			switch (baseAct)
+			{
+				case ACT_HL2MP_IDLE:			weaponTranslation = ACT_HL2MP_IDLE_USE_HEAVY; break;
+				case ACT_HL2MP_RUN:				weaponTranslation = ACT_HL2MP_RUN_USE_HEAVY; break;
+				case ACT_HL2MP_WALK:			weaponTranslation = ACT_HL2MP_WALK_USE_HEAVY; break;
+				case ACT_HL2MP_IDLE_CROUCH:		weaponTranslation = ACT_HL2MP_IDLE_CROUCH_USE_HEAVY; break;
+				case ACT_HL2MP_WALK_CROUCH:		weaponTranslation = ACT_HL2MP_WALK_CROUCH_USE_HEAVY; break;
+				case ACT_HL2MP_JUMP:			weaponTranslation = ACT_HL2MP_JUMP_USE_HEAVY; break;
+			}
+		}
+		else
+		{
+			switch (baseAct)
+			{
+				case ACT_HL2MP_IDLE:			weaponTranslation = ACT_HL2MP_IDLE_USE; break;
+				case ACT_HL2MP_RUN:				weaponTranslation = ACT_HL2MP_RUN_USE; break;
+				case ACT_HL2MP_WALK:			weaponTranslation = ACT_HL2MP_WALK_USE; break;
+				case ACT_HL2MP_IDLE_CROUCH:		weaponTranslation = ACT_HL2MP_IDLE_CROUCH_USE; break;
+				case ACT_HL2MP_WALK_CROUCH:		weaponTranslation = ACT_HL2MP_WALK_CROUCH_USE; break;
+				case ACT_HL2MP_JUMP:			weaponTranslation = ACT_HL2MP_JUMP_USE; break;
+			}
+		}
+	}
+#endif
+
+	return weaponTranslation;
+}
+#else
 // Below this many degrees, slow down turning rate linearly
 #define FADE_TURN_DEGREES	45.0f
 // After this, need to start turning feet
@@ -575,3 +629,4 @@ void CPlayerAnimState::GetOuterAbsVelocity( Vector& vel )
 	vel = GetOuter()->GetAbsVelocity();
 #endif
 }
+#endif
