@@ -24,6 +24,7 @@
 #include "NextBot.h"
 #ifdef MAPBASE
 #include "bot/hl2mp_bot_manager.h"
+#include "mapbase/protagonist_system.h"
 #endif
 
 #include "engine/IEngineSound.h"
@@ -41,6 +42,10 @@ extern CBaseEntity				*g_pLastSpawn;
 ConVar hl2mp_spawn_frag_fallback_radius( "hl2mp_spawn_frag_fallback_radius", "48", FCVAR_NONE, "If no spawns are available, kill players with this radius to allow new players to spawn." );
 
 #define HL2MP_COMMAND_MAX_RATE 0.3
+
+#ifdef MAPBASE
+ConVar	sv_hl2mp_protagonist_select( "sv_hl2mp_protagonist_select", "0", FCVAR_NONE, "Allows players to select any valid protagonist, rather than being limited to default HL2:DM models." );
+#endif
 
 void DropPrimedFragGrenade( CHL2MP_Player *pPlayer, CBaseCombatWeapon *pGrenade );
 
@@ -403,6 +408,23 @@ void CHL2MP_Player::Spawn(void)
 
 bool CHL2MP_Player::ValidatePlayerModel( const char *pModel )
 {
+#ifdef MAPBASE
+	if (pModel[0] == '#')
+	{
+		if (!sv_hl2mp_protagonist_select.GetBool())
+		{
+			ClientPrint( this, HUD_PRINTTALK, "Server does not allow direct protagonist selection" );
+			return false;
+		}
+
+		int nProtagonist = g_ProtagonistSystem.FindProtagonistIndex( pModel + 1 );
+		if (nProtagonist != -1)
+		{
+			return true;
+		}
+	}
+#endif
+
 	int iModels = ARRAYSIZE( g_ppszRandomCitizenModels );
 	int i;	
 
@@ -444,7 +466,11 @@ void CHL2MP_Player::SetPlayerTeamModel( void )
 
 	int modelIndex = modelinfo->GetModelIndex( szModelName );
 
+#ifdef MAPBASE
+	if ( (modelIndex == -1 && szModelName[0] != '#') || ValidatePlayerModel(szModelName) == false)
+#else
 	if ( modelIndex == -1 || ValidatePlayerModel( szModelName ) == false )
+#endif
 	{
 		szModelName = "models/Combine_Soldier.mdl";
 		m_iModelType = TEAM_COMBINE;
@@ -479,8 +505,34 @@ void CHL2MP_Player::SetPlayerTeamModel( void )
 
 		m_iModelType = TEAM_REBELS;
 	}
-	
+
+#ifdef MAPBASE
+	if ( szModelName[0] == '#' )
+	{
+		// Protagonist name. Was already validated above
+		SetProtagonist( szModelName + 1 );
+	}
+	else
+	{
+		// Find out if we have a protagonist for this model
+		const char *pszProtagonistName = g_ProtagonistSystem.FindProtagonistByModel( szModelName );
+		if (pszProtagonistName)
+		{
+			SetProtagonist( pszProtagonistName );
+
+			// Fall back if not accepted
+			if ( GetProtagonistIndex() == -1 )
+				SetModel( szModelName );
+		}
+		else
+		{
+			SetModel( szModelName );
+		}
+	}
+#else
 	SetModel( szModelName );
+#endif
+
 	SetupPlayerSoundsByModel( szModelName );
 
 	m_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;
@@ -543,6 +595,18 @@ void CHL2MP_Player::SetPlayerModel( void )
 		}
 	}
 
+#ifdef MAPBASE
+	if (szModelName[0] == '#')
+	{
+		// Protagonist name. Was already validated above
+		SetProtagonist( szModelName + 1 );
+	}
+	else
+	{
+		ResetProtagonist();
+	}
+#endif
+
 	int modelIndex = modelinfo->GetModelIndex( szModelName );
 
 	if ( modelIndex == -1 )
@@ -556,7 +620,28 @@ void CHL2MP_Player::SetPlayerModel( void )
 		engine->ClientCommand ( edict(), szReturnString );
 	}
 
+#ifdef MAPBASE
+	if (GetProtagonistIndex() == -1)
+	{
+		// Find out if we have a protagonist for this model
+		const char *pszProtagonistName = g_ProtagonistSystem.FindProtagonistByModel( szModelName );
+		if (pszProtagonistName)
+		{
+			SetProtagonist( pszProtagonistName );
+
+			// Fall back if not accepted
+			if ( GetProtagonistIndex() <= -1 )
+				SetModel( szModelName );
+		}
+		else
+		{
+			SetModel( szModelName );
+		}
+	}
+#else
 	SetModel( szModelName );
+#endif
+
 	SetupPlayerSoundsByModel( szModelName );
 
 	m_flNextModelChangeTime = gpGlobals->curtime + MODEL_CHANGE_INTERVAL;

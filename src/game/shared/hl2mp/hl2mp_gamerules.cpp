@@ -35,6 +35,7 @@
 	#include "hl2mp_cvars.h"
 #ifdef MAPBASE
 	#include "bot/hl2mp_bot_manager.h"
+	#include "mapbase/protagonist_system.h"
 #endif
 
 extern void respawn(CBaseEntity *pEdict, bool fCopyCorpse);
@@ -878,6 +879,26 @@ void CHL2MPRules::ClientSettingsChanged( CBasePlayer *pPlayer )
 		}
 		else
 		{
+#ifdef MAPBASE
+			if (szModelName[0] == '#')
+			{
+				int nProtagonist = g_ProtagonistSystem.FindProtagonistIndex( szModelName + 1 );
+				if (nProtagonist != -1)
+				{
+					int nTeam = g_ProtagonistSystem.GetProtagonist_Team( nProtagonist );
+					if ( nTeam == TEAM_REBELS )
+					{
+						pHL2Player->ChangeTeam( TEAM_REBELS );
+					}
+					else if ( nTeam == TEAM_COMBINE )
+					{
+						pHL2Player->ChangeTeam( TEAM_COMBINE );
+					}
+				}
+			}
+			else
+#endif
+
 			if ( Q_stristr( szModelName, "models/human") )
 			{
 				pHL2Player->ChangeTeam( TEAM_REBELS );

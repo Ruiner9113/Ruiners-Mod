@@ -4604,6 +4604,15 @@ void CHL2_Player::SetProtagonist( const char *pszProtagonist )
 		return;
 	}
 
+#ifdef HL2MP
+	int nTeam = g_ProtagonistSystem.GetProtagonist_Team( nIndex );
+	if (nTeam != GetTeamNumber() && GetTeamNumber() != TEAM_UNASSIGNED && nTeam != TEAM_ANY)
+	{
+		// Not an acceptable team
+		return;
+	}
+#endif
+
 	if (m_nProtagonistIndex != -1)
 	{
 		// Flush any pre-existing data
