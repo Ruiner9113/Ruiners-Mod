@@ -2188,6 +2188,12 @@ public:
 
 
 	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_lifeState );
+#ifdef MAPBASE_MP
+	// User-friendly name used for death notices, etc.
+	// Now transmitted by player resource
+	//CNetworkString( m_szNetname, 32 );
+	string_t			m_szNetname;
+#endif
 
 	//---------------------------------
 	//	Outputs
@@ -2443,6 +2449,15 @@ public:
 	static ScriptHook_t	g_Hook_BuildScheduleTestBits;
 	static ScriptHook_t	g_Hook_StartTask;
 	static ScriptHook_t	g_Hook_RunTask;
+#endif
+
+#ifdef MAPBASE_MP
+public:
+	// Net Name
+	const char *GetNetName() { return STRING( m_szNetname ); }
+	string_t GetNetNameID() { return m_szNetname; }
+	virtual const char	*GetDefaultNetName() { return GetClassname(); }
+	void				InputSetNetName( inputdata_t &inputdata );
 #endif
 
 private:

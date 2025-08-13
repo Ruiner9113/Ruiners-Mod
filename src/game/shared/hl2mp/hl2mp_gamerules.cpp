@@ -36,6 +36,8 @@
 #ifdef MAPBASE
 	#include "bot/hl2mp_bot_manager.h"
 	#include "mapbase/protagonist_system.h"
+	#include "ai_basenpc.h"
+	#include "hl2mp_player_resource.h"
 #endif
 
 extern void respawn(CBaseEntity *pEdict, bool fCopyCorpse);
@@ -131,6 +133,9 @@ static const char *s_PreserveEnts[] =
 	"predicted_viewmodel",
 	"worldspawn",
 	"point_devshot_camera",
+#ifdef MAPBASE
+	"hl2mp_player_manager",
+#endif
 	"", // END Marker
 };
 
@@ -236,7 +241,17 @@ void CHL2MPRules::CreateStandardEntities( void )
 #ifndef CLIENT_DLL
 	// Create the entity that will send our data to the client.
 
+#ifdef MAPBASE
+	// Create the player resource
+	g_pPlayerResource = (CPlayerResource*)CBaseEntity::Create( "hl2mp_player_manager", vec3_origin, vec3_angle );
+	if (g_pPlayerResource)
+	{
+		// Some maps may assume it's called player_manager
+		g_pPlayerResource->SetName( MAKE_STRING( "player_manager" ) );
+	}
+#else
 	BaseClass::CreateStandardEntities();
+#endif
 
 	g_pLastCombineSpawn = NULL;
 	g_pLastRebelSpawn = NULL;

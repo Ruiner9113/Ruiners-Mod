@@ -816,7 +816,7 @@ void C_BasePlayer::FireGameEvent( IGameEvent *event )
 //-----------------------------------------------------------------------------
 // returns the player name
 //-----------------------------------------------------------------------------
-const char * C_BasePlayer::GetPlayerName()
+const char * C_BasePlayer::GetPlayerName() const
 {
 	return g_PR ? g_PR->GetPlayerName( entindex() ) : "";
 }

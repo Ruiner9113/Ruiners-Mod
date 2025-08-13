@@ -99,6 +99,10 @@
 #include "mapbase/matchers.h"
 #include "items.h"
 #include "point_camera.h"
+#ifdef HL2MP
+#include "hl2mp_gamerules.h"
+#include "hl2mp_player_resource.h"
+#endif
 #endif
 
 #ifdef MAPBASE_VSCRIPT
@@ -579,6 +583,11 @@ void CAI_BaseNPC::CleanupOnDeath( CBaseEntity *pCulprit, bool bFireDeathOutput )
 		}
 
 		RemoveActorFromScriptedScenes( this, false /*all scenes*/ );
+
+#if defined(HL2MP) && defined(MAPBASE_MP)
+		if (g_HL2MP_PR)
+			g_HL2MP_PR->ForceNPCUpdate();
+#endif
 	}
 	else
 		CGMsg( 1, CON_GROUP_NPC_AI, "Unexpected double-death-cleanup\n" );
@@ -4624,6 +4633,19 @@ void CAI_BaseNPC::NPCThink( void )
 				PerformMovement();
 
 				m_bIsMoving = IsMoving();
+
+#ifdef MAPBASE_MP
+				if (bInPVS)
+				{
+#ifdef HL2MP
+					// Make sure the player resource has us listed if we just entered PVS
+					if (g_HL2MP_PR->GetNPCIndex( entindex() ) == -1)
+					{
+						g_HL2MP_PR->ForceNPCUpdate();
+					}
+#endif
+				}
+#endif
 
 				PostMovement();
 
@@ -12481,6 +12503,11 @@ BEGIN_DATADESC( CAI_BaseNPC )
 	DEFINE_FIELD( m_FakeSequenceGestureLayer,	FIELD_INTEGER ),
 #endif
 
+#ifdef MAPBASE_MP
+	//DEFINE_ARRAY( m_szNetname, FIELD_CHARACTER, MAX_PLAYER_NAME_LENGTH ),
+	DEFINE_KEYFIELD( m_szNetname, FIELD_STRING, "netname" ),
+#endif
+
 	// Satisfy classcheck
 	// DEFINE_FIELD( m_ScheduleHistory, CUtlVector < AIScheduleChoice_t > ),
 
@@ -12585,6 +12612,10 @@ BEGIN_DATADESC( CAI_BaseNPC )
 	DEFINE_INPUTFUNC( FIELD_FLOAT, "SetDistTooFar", InputSetDistTooFar ),
 
 	DEFINE_INPUTFUNC( FIELD_FLOAT, "SetSpeedModifier", InputSetSpeedModifier ),
+
+#ifdef MAPBASE_MP
+	DEFINE_INPUTFUNC( FIELD_STRING, "SetNetName", InputSetNetName ),
+#endif
 
 	DEFINE_OUTPUT( m_OnStateChange,	"OnStateChange" ),
 #endif
@@ -12876,6 +12907,13 @@ void CAI_BaseNPC::Activate( void )
 	m_ScheduleHistory.RemoveAll();
 #endif//AI_MONITOR_FOR_OSCILLATION
 
+#ifdef MAPBASE_MP
+	if ( GetNetName()[0] == '\0' )
+	{
+		//V_strncpy( m_szNetname.GetForModify(), GetDefaultNetName(), sizeof( m_szNetname ) );
+		m_szNetname = AllocPooledString( GetDefaultNetName() );
+	}
+#endif
 }
 
 void CAI_BaseNPC::Precache( void )
@@ -13420,6 +13458,10 @@ CAI_BaseNPC::CAI_BaseNPC(void)
 	m_flSpeedModifier = 1.0f;
 
 	m_FakeSequenceGestureLayer = -1;
+#endif
+
+#ifdef MAPBASE_MP
+	m_szNetname = NULL_STRING;
 #endif
 }
 
@@ -15121,6 +15163,21 @@ void CAI_BaseNPC::InputSetSpeedModifier( inputdata_t &inputdata )
 {
 	this->m_flSpeedModifier = inputdata.value.Float();
 }
+
+#ifdef MAPBASE_MP
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CAI_BaseNPC::InputSetNetName( inputdata_t &inputdata )
+{
+	m_szNetname = AllocPooledString( inputdata.value.String() );
+
+#ifdef HL2MP
+	if (g_HL2MP_PR)
+		g_HL2MP_PR->ForceNPCUpdate();
+#endif
+}
+#endif
 #endif
 
 //-----------------------------------------------------------------------------

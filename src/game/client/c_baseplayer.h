@@ -314,7 +314,7 @@ public:
 	virtual void				OverrideView( CViewSetup *pSetup );
 
 	// returns the player name
-	const char *				GetPlayerName();
+	const char *				GetPlayerName() const;
 	virtual const Vector		GetPlayerMins( void ) const; // uses local player
 	virtual const Vector		GetPlayerMaxs( void ) const; // uses local player
 

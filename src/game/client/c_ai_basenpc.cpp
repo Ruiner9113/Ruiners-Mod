@@ -12,6 +12,12 @@
 #include "c_basehlplayer.h"
 #endif
 
+#ifdef MAPBASE_MP
+#ifdef HL2MP
+#include "c_hl2mp_playerresource.h"
+#endif
+#endif
+
 #include "death_pose.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
@@ -182,4 +188,22 @@ bool C_AI_BaseNPC::GetRagdollInitBoneArrays( matrix3x4_t *pDeltaBones0, matrix3x
 
 	return bRet;
 }
+
+#ifdef MAPBASE_MP
+//-----------------------------------------------------------------------------
+// Purpose: 
+// Output : char const
+//-----------------------------------------------------------------------------
+const char *C_AI_BaseNPC::GetPlayerName( void ) const
+{
+#ifdef HL2MP
+	if (g_HL2MP_PR)
+	{
+		return g_HL2MP_PR->GetNPCName( entindex() );
+	}
+#endif
+
+	return BaseClass::GetPlayerName();
+}
+#endif
 
