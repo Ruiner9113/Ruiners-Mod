@@ -1556,6 +1556,65 @@ CBaseEntity* CHL2MP_Player::EntSelectSpawnPoint( void )
 
 	CBaseEntity *pFirstSpot = pSpot;
 
+#ifdef BASIC_HL2MP_COOP
+	if ( HL2MPRules()->IsCoOp() )
+	{
+		// Try to spawn on the best player we find
+		extern ConVar hl2mp_avoidteammates;
+		if ( hl2mp_avoidteammates.GetBool() )
+		{
+			// HACKHACK: Players don't have their collision group set when they first connect,
+			// which is needed for UTIL_TraceEntity below
+			if ( GetCollisionGroup() == COLLISION_GROUP_NONE )
+				SetCollisionGroup( COLLISION_GROUP_PLAYER );
+
+			CBasePlayer *pBestPlayer = NULL;
+			float flBestHealth = 0.25f;
+			for (int i = 1; i <= gpGlobals->maxClients; i++ ) 
+			{ 
+				CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
+				if ( !pPlayer || pPlayer == this || !pPlayer->IsAlive() || pPlayer->GetTeamNumber() != GetTeamNumber() ) 
+					continue;
+
+				float flHealth = ((float)pPlayer->GetHealth() / (float)pPlayer->GetMaxHealth());
+				if ( flHealth > flBestHealth )
+				{
+					trace_t tr;
+					UTIL_TraceEntity( this, pPlayer->GetAbsOrigin(), pPlayer->GetAbsOrigin(), MASK_PLAYERSOLID, &tr );
+					if ( !tr.startsolid && !tr.allsolid )
+					{
+						pBestPlayer = pPlayer;
+						flBestHealth = flHealth;
+					}
+				}
+			}
+
+			if ( pBestPlayer )
+			{
+				pSpot = pBestPlayer;
+				goto ReturnSpot;
+			}
+		}
+
+		// Don't override if teamplay already selected a team spawn
+		if (FStrEq(pSpawnpointName, "info_player_deathmatch"))
+		{
+			pSpawnpointName = "info_player_coop";
+			pLastSpawnPoint = g_pLastSpawn;
+
+			if ( gEntList.FindEntityByClassname( NULL, pSpawnpointName ) == NULL )
+			{
+				// Check base class because only the base class checks for master info_player_starts
+				pSpot = BaseClass::EntSelectSpawnPoint();
+				if (pSpot)
+					goto ReturnSpot;
+				else
+					pSpawnpointName = "info_player_deathmatch";
+			}
+		}
+	}
+#endif
+
 	do 
 	{
 		if ( pSpot )

@@ -18,9 +18,18 @@
 #include "gamerules.h"
 #include "teamplay_gamerules.h"
 #include "gamevars_shared.h"
+#ifdef MAPBASE
+#include "hl2_gamerules.h"
+#endif
 
 #ifndef CLIENT_DLL
 #include "hl2mp_player.h"
+#endif
+
+#ifdef MAPBASE
+// Adds support for a basic co-op mode which makes unteamed players friendly and is recognized as "co-op" by the game.
+// Comment out this definition if this is not desired.
+#define BASIC_HL2MP_COOP 1
 #endif
 
 #define VEC_CROUCH_TRACE_MIN	HL2MPRules()->GetHL2MPViewVectors()->m_vCrouchTraceMin
@@ -38,11 +47,36 @@ enum
 	#define CHL2MPGameRulesProxy C_HL2MPGameRulesProxy
 #endif
 
-class CHL2MPGameRulesProxy : public CGameRulesProxy
+#ifdef HL2MP_USES_HL2_GAMERULES
+	#define CHL2MPRulesBase CHalfLife2
+	#define CHL2MPRulesProxyBase CHalfLife2Proxy
+#else
+	#define CHL2MPRulesBase CTeamplayRules
+	#define CHL2MPRulesProxyBase CGameRulesProxy
+#endif
+
+class CHL2MPGameRulesProxy : public CHL2MPRulesProxyBase
 {
 public:
-	DECLARE_CLASS( CHL2MPGameRulesProxy, CGameRulesProxy );
+	DECLARE_CLASS( CHL2MPGameRulesProxy, CHL2MPRulesProxyBase );
 	DECLARE_NETWORKCLASS();
+
+#if defined(MAPBASE) && defined(GAME_DLL)
+	bool KeyValue( const char *szKeyName, const char *szValue );
+	bool GetKeyValue( const char *szKeyName, char *szValue, int iMaxLen );
+
+	virtual int	Save( ISave &save );
+	virtual int	Restore( IRestore &restore );
+
+	// Inputs
+	void InputSetAllowDefaultItems( inputdata_t &inputdata );
+	void InputSetAllowDefaultSuit( inputdata_t &inputdata );
+
+	bool m_save_AllowDefaultItems;
+	bool m_save_AllowDefaultSuit;
+
+	DECLARE_DATADESC();
+#endif
 };
 
 class HL2MPViewVectors : public CViewVectors
@@ -79,10 +113,10 @@ public:
 	Vector m_vCrouchTraceMax;	
 };
 
-class CHL2MPRules : public CTeamplayRules
+class CHL2MPRules : public CHL2MPRulesBase
 {
 public:
-	DECLARE_CLASS( CHL2MPRules, CTeamplayRules );
+	DECLARE_CLASS( CHL2MPRules, CHL2MPRulesBase );
 
 #ifdef CLIENT_DLL
 
@@ -124,6 +158,7 @@ public:
 	void OnNavMeshLoad( void );
 	
 #ifndef CLIENT_DLL
+	virtual int ItemShouldRespawn( CItem *pItem );
 	virtual Vector VecItemRespawnSpot( CItem *pItem );
 	virtual QAngle VecItemRespawnAngles( CItem *pItem );
 	virtual float	FlItemRespawnTime( CItem *pItem );
@@ -160,13 +195,24 @@ public:
 
 	
 	bool	IsTeamplay( void ) { return m_bTeamPlayEnabled;	}
+#ifdef BASIC_HL2MP_COOP
+	bool	IsDeathmatch( void ) { return !m_bCoOpEnabled; }
+	bool	IsCoOp( void ) { return m_bCoOpEnabled; }
+#endif
 	void	CheckAllPlayersReady( void );
 
 	virtual bool IsConnectedUserInfoChangeAllowed( CBasePlayer *pPlayer );
+
+#ifndef HL2MP_USES_HL2_GAMERULES
+	bool	MegaPhyscannonActive( void ) { return false; }
+#endif
 	
 private:
 	
 	CNetworkVar( bool, m_bTeamPlayEnabled );
+#ifdef BASIC_HL2MP_COOP
+	CNetworkVar( bool, m_bCoOpEnabled );
+#endif
 	CNetworkVar( float, m_flGameStartTime );
 	CUtlVector<EHANDLE> m_hRespawnableItemsAndWeapons;
 	float m_tmNextPeriodicThink;

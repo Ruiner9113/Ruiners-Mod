@@ -10,8 +10,20 @@
 #pragma once
 #endif
 
+#ifdef MAPBASE_MP
+// By default, CHL2MPRules inherits from the teamplay gamerules while HL2's gamerules sits unused.
+// This preprocessor makes HL2's gamerules inherit from the teamplay gamerules, and then makes CHL2MPRules inherit from HL2's gamerules.
+// This basically just wedges CHalfLife2 into their inheritance. It also switches to stock HL2 ammo definitions.
+// This allows HL2MP to use HL2 gamerules functions and NPC parameters directly.
+// Comment out this definition if this is not desired.
+#define HL2MP_USES_HL2_GAMERULES 1
+#endif
+
 #include "gamerules.h"
 #include "singleplay_gamerules.h"
+#ifdef HL2MP_USES_HL2_GAMERULES
+#include "teamplayroundbased_gamerules.h"
+#endif
 #include "hl2_shareddefs.h"
 
 #ifdef CLIENT_DLL
@@ -23,6 +35,11 @@
 #define FRIENDLY_FIRE_GLOBALNAME "friendly_fire_override"
 #endif
 
+#ifdef HL2MP_USES_HL2_GAMERULES
+	#define CHalfLife2Base CTeamplayRules
+#else
+	#define CHalfLife2Base CSingleplayRules
+#endif
 
 class CHalfLife2Proxy : public CGameRulesProxy
 {
@@ -62,10 +79,10 @@ public:
 };
 
 
-class CHalfLife2 : public CSingleplayRules
+class CHalfLife2 : public CHalfLife2Base
 {
 public:
-	DECLARE_CLASS( CHalfLife2, CSingleplayRules );
+	DECLARE_CLASS( CHalfLife2, CHalfLife2Base );
 
 	// Damage Query Overrides.
 	virtual bool			Damage_IsTimeBased( int iDmgType );
@@ -84,6 +101,8 @@ public:
 #ifdef MAPBASE_VSCRIPT
 	virtual void			RegisterScriptFunctions( void );
 #endif
+	
+	bool	MegaPhyscannonActive( void ) { return m_bMegaPhysgun;	}
 
 private:
 	// Rules change for the mega physgun
@@ -122,7 +141,6 @@ public:
 	bool	NPC_ShouldDropHealth( CBasePlayer *pRecipient );
 	void	NPC_DroppedHealth( void );
 	void	NPC_DroppedGrenade( void );
-	bool	MegaPhyscannonActive( void ) { return m_bMegaPhysgun;	}
 	
 	virtual bool IsAlyxInDarknessMode();
 
@@ -168,7 +186,7 @@ private:
 //-----------------------------------------------------------------------------
 inline CHalfLife2* HL2GameRules()
 {
-#if ( !defined( HL2_DLL ) && !defined( HL2_CLIENT_DLL ) ) || defined( HL2MP )
+#if ( !defined( HL2_DLL ) && !defined( HL2_CLIENT_DLL ) ) || ( defined( HL2MP ) && !defined( HL2MP_USES_HL2_GAMERULES ) )
 	Assert( 0 );	// g_pGameRules is NOT an instance of CHalfLife2 and bad things happen
 #endif
 
