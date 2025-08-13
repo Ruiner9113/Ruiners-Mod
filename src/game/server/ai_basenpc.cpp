@@ -4641,6 +4641,23 @@ void CAI_BaseNPC::NPCThink( void )
 #ifdef MAPBASE_MP
 				if (bInPVS)
 				{
+					// Recalculate player relationship for client
+					CBasePlayer *pPlayer = UTIL_GetNearestPlayer( GetAbsOrigin() );
+					if (pPlayer)
+					{
+						Disposition_t nDisposition = pPlayer->IRelationType( this );
+						switch (nDisposition)
+						{
+							case D_LI:		m_nDefaultPlayerRelationship = GR_TEAMMATE; break;
+							case D_FR:
+							case D_HT:		m_nDefaultPlayerRelationship = GR_ENEMY; break;
+							default:
+							case D_NU:		m_nDefaultPlayerRelationship = GR_NOTTEAMMATE; break;
+						}
+					}
+					else
+						m_nDefaultPlayerRelationship = GR_NOTTEAMMATE; // Neutral
+
 #ifdef HL2MP
 					// Make sure the player resource has us listed if we just entered PVS
 					if (g_HL2MP_PR->GetNPCIndex( entindex() ) == -1)
@@ -12857,6 +12874,33 @@ BEGIN_SIMPLE_DATADESC( AIScheduleState_t )
 END_DATADESC()
 
 
+#ifdef MAPBASE_MP
+void *SendProxy_SendBaseNPCGameDataTable( const SendProp *pProp, const void *pStruct, const void *pVarData, CSendProxyRecipients *pRecipients, int objectID )
+{
+	// Only send if we can reasonably expect to be a "participant" in the game
+	// Invisible NPCs are already EF_NODRAW, so this mainly denies generic_actor, npc_furniture, etc.
+	CAI_BaseNPC *pNPC = ( CAI_BaseNPC * )pStruct;
+	if ( pNPC != NULL )
+	{
+		Class_T nClass = pNPC->Classify();
+		if (nClass == CLASS_NONE)
+		{
+			return NULL;
+		}
+	}
+	return (void *)pVarData;
+}
+REGISTER_SEND_PROXY_NON_MODIFIED_POINTER( SendProxy_SendBaseNPCGameDataTable );
+
+BEGIN_SEND_TABLE_NOBASE( CAI_BaseNPC, DT_BaseNPCGameData )
+	SendPropInt( SENDINFO( m_iHealth ), -1, SPROP_VARINT | SPROP_CHANGES_OFTEN ),
+	SendPropInt( SENDINFO( m_takedamage ), 2, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_bloodColor ), 3, SPROP_UNSIGNED ),
+	//SendPropString( SENDINFO( m_szNetname ) ),	// Transmitted by player resource now
+	SendPropInt( SENDINFO( m_nDefaultPlayerRelationship ), 2, SPROP_UNSIGNED ),
+END_SEND_TABLE();
+#endif
+
 IMPLEMENT_SERVERCLASS_ST( CAI_BaseNPC, DT_AI_BaseNPC )
 	SendPropInt( SENDINFO( m_lifeState ), 3, SPROP_UNSIGNED ),
 	SendPropBool( SENDINFO( m_bPerformAvoidance ) ),
@@ -12869,6 +12913,9 @@ IMPLEMENT_SERVERCLASS_ST( CAI_BaseNPC, DT_AI_BaseNPC )
 	SendPropInt( SENDINFO( m_iSpeedModSpeed ) ),
 	SendPropBool( SENDINFO( m_bImportanRagdoll ) ),
 	SendPropFloat( SENDINFO( m_flTimePingEffect ) ),
+#ifdef MAPBASE_MP
+	SendPropDataTable( "npc_gamedata", 0, &REFERENCE_SEND_TABLE( DT_BaseNPCGameData ), SendProxy_SendBaseNPCGameDataTable ),
+#endif
 END_SEND_TABLE()
 
 //-------------------------------------

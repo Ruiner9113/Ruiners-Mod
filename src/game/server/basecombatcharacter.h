@@ -595,7 +595,11 @@ private:
 	void				DestroyGlowEffect( void );
 
 protected:
+#ifdef MAPBASE_MP
+	CNetworkVarForDerived( int, m_bloodColor );
+#else
 	int			m_bloodColor;			// color of blood particless
+#endif
 
 	// -------------------
 	// combat ability data

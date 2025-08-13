@@ -2189,6 +2189,14 @@ public:
 
 	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_lifeState );
 #ifdef MAPBASE_MP
+	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_iHealth );
+	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_takedamage );
+	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_bloodColor );
+
+	// Used to determine whether to draw blood, target ID, etc. on the client
+	// Uses first 3 gamerules relationship return codes (GR_TEAMMATE, GR_NOTTEAMMATE, and GR_ENEMY)
+	CNetworkVar( int, m_nDefaultPlayerRelationship );
+
 	// User-friendly name used for death notices, etc.
 	// Now transmitted by player resource
 	//CNetworkString( m_szNetname, 32 );
