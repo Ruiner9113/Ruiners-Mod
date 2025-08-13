@@ -84,6 +84,10 @@ ConVar ai_use_visibility_cache( "ai_use_visibility_cache", "1" );
 #endif
 #endif
 
+#ifdef MAPBASE
+ConVar	ai_team_relationships( "ai_team_relationships", "1", FCVAR_NONE, "If assigned to a team, NPCs will reinterpret default relationships according to which team each player/NPC is on." );
+#endif
+
 BEGIN_DATADESC( CBaseCombatCharacter )
 
 #ifdef INVASION_DLL
@@ -3356,6 +3360,35 @@ Disposition_t CBaseCombatCharacter::IRelationType ( CBaseEntity *pTarget )
 			{
 				// Use the disposition returned by the script
 				return (Disposition_t)functionReturn.m_int;
+			}
+		}
+#endif
+
+#ifdef MAPBASE
+		if (ai_team_relationships.GetBool())
+		{
+			// If both me and my target on a team, override default relationships
+			if (GetTeamNumber() != TEAM_UNASSIGNED && pTarget->GetTeamNumber() != TEAM_UNASSIGNED)
+			{
+				// Only override if our relationship with this entity is identical to the default (prevents overriding ai_relationship)
+				Disposition_t nDisposition = FindEntityRelationship( pTarget )->disposition;
+				if (nDisposition == GetDefaultRelationshipDisposition( Classify(), pTarget->Classify() ))
+				{
+					if (GetTeamNumber() == pTarget->GetTeamNumber())
+					{
+						// Same team = like (neutral if that was the default)
+						if (nDisposition == D_NU)
+							return D_NU;
+						return D_LI;
+					}
+					else
+					{
+						// Not the same team = hate (fear if that was the default)
+						if (nDisposition == D_FR)
+							return D_FR;
+						return D_HT;
+					}
+				}
 			}
 		}
 #endif

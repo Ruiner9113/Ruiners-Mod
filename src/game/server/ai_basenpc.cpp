@@ -176,6 +176,10 @@ extern ISoundEmitterSystemBase *soundemitterbase;
 ConVar	ai_dynint_always_enabled( "ai_dynint_always_enabled", "0", FCVAR_NONE, "Makes the \"Don't Care\" setting equivalent to \"Yes\"." );
 
 ConVar	ai_debug_fake_sequence_gestures_always_play( "ai_debug_fake_sequence_gestures_always_play", "0", FCVAR_NONE, "Always plays fake sequence gestures." );
+
+#ifdef HL2MP
+ConVar	ai_team_autoassign( "ai_team_autoassign", "1", FCVAR_NONE, "Automatically assigns NPCs to DM teams. Intended for use with ai_team_relationships." );
+#endif
 #endif
 
 #ifndef _RETAIL
@@ -8710,6 +8714,47 @@ void CAI_BaseNPC::OnRangeAttack1()
 void CAI_BaseNPC::InitRelationshipTable(void)
 {
 	AddRelationship( STRING( m_RelationshipString ), NULL );
+
+#if defined(MAPBASE) && defined(HL2MP)
+	if (ai_team_autoassign.GetBool() && GetTeamNumber() == TEAM_UNASSIGNED)
+	{
+		// Assign team based on classify class
+		switch (Classify())
+		{
+			case CLASS_METROPOLICE:
+			case CLASS_COMBINE:
+			case CLASS_MILITARY:
+			case CLASS_COMBINE_HUNTER:
+			case CLASS_MANHACK:
+			case CLASS_STALKER:
+			case CLASS_PROTOSNIPER:
+			case CLASS_COMBINE_GUNSHIP:
+			case CLASS_SCANNER:
+				ChangeTeam( TEAM_COMBINE );
+				break;
+
+			case CLASS_PLAYER_ALLY:
+			case CLASS_PLAYER_ALLY_VITAL:
+			case CLASS_CITIZEN_REBEL:
+			case CLASS_CONSCRIPT:
+			case CLASS_VORTIGAUNT:
+			case CLASS_HACKED_ROLLERMINE:
+				ChangeTeam( TEAM_REBELS );
+				break;
+
+			case CLASS_NONE:
+				{
+					if (ClassMatches("npc_turret*"))
+					{
+						// HACKHACK: Turrets do not have a class until they are enabled.
+						// TODO: Account for hacked turrets! Could be done with a new virtual function
+						ChangeTeam( TEAM_COMBINE );
+					}
+					break;
+				}
+		}
+	}
+#endif
 }
 
 
