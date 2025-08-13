@@ -143,7 +143,13 @@ public:
 	virtual void ClientSettingsChanged( CBasePlayer *pPlayer );
 	virtual int PlayerRelationship( CBaseEntity *pPlayer, CBaseEntity *pTarget );
 	virtual void GoToIntermission( void );
+	void GetDeathNoticeData( CBaseEntity *pVictim, const CTakeDamageInfo &info, const char **killer_weapon_name, int &killer_ID );
+#ifdef MAPBASE
+	virtual void DeathNotice( CBaseCombatCharacter *pVictim, const CTakeDamageInfo &info ); // Supports NPCs
+	virtual void DeathNotice( CBasePlayer *pVictim, const CTakeDamageInfo &info ) { DeathNotice( pVictim->MyCombatCharacterPointer(), info ); }
+#else
 	virtual void DeathNotice( CBasePlayer *pVictim, const CTakeDamageInfo &info );
+#endif
 	virtual const char *GetGameDescription( void );
 	// derive this function if you mod uses encrypted weapon info files
 	virtual const unsigned char *GetEncryptionKey( void ) { return (unsigned char *)"x9Ke0BY7"; }
@@ -172,6 +178,8 @@ public:
 	const char *GetChatFormat( bool bTeamOnly, CBasePlayer *pPlayer );
  
 #ifdef MAPBASE
+	void NPCKilled( CAI_BaseNPC *pVictim, const CTakeDamageInfo &info );
+
 	void PlayerSpawn( CBasePlayer *pPlayer );
 	void PlayerIdle( CBasePlayer *pPlayer );
 

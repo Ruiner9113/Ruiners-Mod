@@ -48,6 +48,9 @@ ConVar sv_hl2mp_weapon_respawn_time( "sv_hl2mp_weapon_respawn_time", "20", FCVAR
 ConVar sv_hl2mp_item_respawn_time( "sv_hl2mp_item_respawn_time", "30", FCVAR_GAMEDLL | FCVAR_NOTIFY );
 ConVar sv_report_client_settings("sv_report_client_settings", "0", FCVAR_GAMEDLL | FCVAR_NOTIFY );
 #ifdef MAPBASE
+ConVar sv_hl2mp_npc_deathnotice_as_killer( "sv_hl2mp_npc_deathnotice_as_killer", "1", FCVAR_GAMEDLL, "If enabled, NPCs which kill players will be recognized in death notices." );
+ConVar sv_hl2mp_npc_deathnotice_as_victim( "sv_hl2mp_npc_deathnotice_as_victim", "1", FCVAR_GAMEDLL, "If enabled, killed NPCs will be recognized in death notices. (Requires 'npc_death' in mod events)" );
+
 ConVar mp_coop( "mp_coop", "0", FCVAR_NOTIFY, "Basic co-op mode. Makes unassigned players friendly to each other." );
 
 ConVar sv_hl2mp_item_respawn_coop( "sv_hl2mp_item_respawn_coop", "0", FCVAR_GAMEDLL | FCVAR_NOTIFY );
@@ -61,6 +64,10 @@ extern CBaseEntity	 *g_pLastRebelSpawn;
 
 #define WEAPON_MAX_DISTANCE_FROM_SPAWN 64
 
+#endif
+
+#ifdef MAPBASE
+ConVar sv_hl2mp_npc_target_id( "sv_hl2mp_npc_target_id", "1", FCVAR_REPLICATED, "If enabled, NPCs will be identified when players look at them with their crosshairs." );
 #endif
 
 
@@ -410,6 +417,33 @@ void CHL2MPRules::PlayerKilled( CBasePlayer *pVictim, const CTakeDamageInfo &inf
 }
 
 #if defined(MAPBASE) && !defined(CLIENT_DLL)
+void CHL2MPRules::NPCKilled( CAI_BaseNPC *pVictim, const CTakeDamageInfo &info )
+{
+	// Ignore bullseyes, actors, etc.
+	if ( pVictim->GetEffects() & EF_NODRAW || pVictim->Classify() == CLASS_NONE )
+		return;
+
+	DeathNotice( pVictim, info );
+
+	if ( IsCoOp() )
+	{
+		CBasePlayer *pScorer = GetDeathScorer( info.GetAttacker(), info.GetInflictor(), pVictim );
+		if (pScorer)
+		{
+			// Award points for NPC kills in co-op
+			// (compensating for IPointsForKill() only accepting players)
+			int nPoints = 1;
+
+			if ( pScorer->IRelationType( pVictim ) == D_LI )
+				nPoints = -1;
+
+			pScorer->IncrementFragCount( nPoints );
+		}
+	}
+
+	BaseClass::NPCKilled( pVictim, info );
+}
+
 void CHL2MPRules::PlayerSpawn( CBasePlayer *pPlayer )
 {
 	// Don't spawn with items when a bot is taking over a player, or vice versa
@@ -880,7 +914,11 @@ void CHL2MPRules::ClientDisconnected( edict_t *pClient )
 //=========================================================
 // Deathnotice. 
 //=========================================================
+#ifdef MAPBASE
+void CHL2MPRules::DeathNotice( CBaseCombatCharacter *pVictim, const CTakeDamageInfo &info )
+#else
 void CHL2MPRules::DeathNotice( CBasePlayer *pVictim, const CTakeDamageInfo &info )
+#endif
 {
 #ifndef CLIENT_DLL
 	// Work out what killed the player, and send a message to all clients about it
@@ -924,8 +962,33 @@ void CHL2MPRules::DeathNotice( CBasePlayer *pVictim, const CTakeDamageInfo &info
 				}
 			}
 		}
+#ifdef MAPBASE
+		else if ( pKiller && pKiller->IsNPC() && sv_hl2mp_npc_deathnotice_as_killer.GetBool() )
+		{
+			killer_ID = pKiller->entindex();
+
+			if ( pInflictor )
+			{
+				if ( pInflictor == pKiller )
+				{
+					// If the inflictor is the killer,  then it must be their current weapon doing the damage
+					if ( pKiller->MyCombatCharacterPointer()->GetActiveWeapon() )
+					{
+						killer_weapon_name = pKiller->MyCombatCharacterPointer()->GetActiveWeapon()->GetClassname();
+					}
+				}
+				else
+				{
+					killer_weapon_name = pInflictor->GetClassname();  // it's just that easy
+				}
+			}
+		}
+#endif
 		else
 		{
+#ifdef MAPBASE
+			if ( pInflictor )
+#endif
 			killer_weapon_name = pInflictor->GetClassname();
 		}
 
@@ -963,10 +1026,36 @@ void CHL2MPRules::DeathNotice( CBasePlayer *pVictim, const CTakeDamageInfo &info
 
 	}
 
+#ifdef MAPBASE
+	if ( !pVictim->IsPlayer() )
+	{
+		if ( sv_hl2mp_npc_deathnotice_as_victim.GetBool() && *pVictim->MyNPCPointer()->GetNetName() )
+		{
+			IGameEvent *event = gameeventmanager->CreateEvent( "npc_death" );
+			if( event )
+			{
+				if (pScorer)
+					killer_ID = pScorer->entindex();
+
+				event->SetInt("victim_entindex", pVictim->entindex() );
+				event->SetInt("attacker_entindex", killer_ID );
+				event->SetString("weapon", killer_weapon_name );
+				event->SetInt( "priority", 6 );
+				gameeventmanager->FireEvent( event );
+			}
+		}
+		return;
+	}
+#endif
+
 	IGameEvent *event = gameeventmanager->CreateEvent( "player_death" );
 	if( event )
 	{
+#ifdef MAPBASE
+		event->SetInt("userid", static_cast<CBasePlayer*>(pVictim)->GetUserID() );
+#else
 		event->SetInt("userid", pVictim->GetUserID() );
+#endif
 		event->SetInt("attacker", killer_ID );
 		event->SetString("weapon", killer_weapon_name );
 		event->SetInt( "priority", 7 );

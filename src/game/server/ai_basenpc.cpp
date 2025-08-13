@@ -632,6 +632,10 @@ void CAI_BaseNPC::Event_Killed( const CTakeDamageInfo &info )
 		return;
 	}
 
+#ifdef MAPBASE
+	g_pGameRules->NPCKilled( this, info );
+#endif
+
 	Wake( false );
 	
 	//Adrian: Select a death pose to extrapolate the ragdoll's velocity.
