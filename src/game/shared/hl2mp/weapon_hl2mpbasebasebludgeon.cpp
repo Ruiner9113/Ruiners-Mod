@@ -220,6 +220,12 @@ void CBaseHL2MPBludgeonWeapon::Hit( trace_t &traceHit, Activity nHitActivity )
 
 		if ( this->PlayFleshyHittySoundOnHit() )
 			WeaponSound( MELEE_HIT );
+
+#ifdef MAPBASE_MP
+		// Don't do impact effect if this is an ally
+		if ( pHitEntity->MyNPCPointer() && pHitEntity->MyNPCPointer()->IsPlayerAlly( pPlayer ) )
+			return;
+#endif
 	}
 
 	// Apply an impact effect

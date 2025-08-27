@@ -68,6 +68,7 @@ extern CBaseEntity	 *g_pLastRebelSpawn;
 
 #ifdef MAPBASE
 ConVar sv_hl2mp_npc_target_id( "sv_hl2mp_npc_target_id", "1", FCVAR_REPLICATED, "If enabled, NPCs will be identified when players look at them with their crosshairs." );
+ConVar hl2mp_avoidteammates( "hl2mp_avoidteammates", "1", FCVAR_REPLICATED, "If enabled, players on the same team will not collide with each other." );
 #endif
 
 

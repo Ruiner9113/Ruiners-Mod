@@ -116,6 +116,8 @@ public:
 	int	  GetPlayerModelType( void ) { return m_iPlayerSoundType;	}
 
 #ifdef MAPBASE
+	virtual bool	ShouldCollide( int collisionGroup, int contentsMask ) const;
+
 	// TF2-style AFK checking
 	void				CheckForIdle( void );
 	void				ResetIdleCheck( void ) { m_flLastAction = gpGlobals->curtime; }

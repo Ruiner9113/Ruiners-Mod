@@ -125,6 +125,38 @@ void CHL2MP_Player::PlayStepSound( Vector &vecOrigin, surfacedata_t *psurface, f
 	EmitSound( filter, entindex(), ep );
 }
 
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+// Purpose: 
+// Input  : collisionGroup - 
+// Output : Returns true on success, false on failure.
+//-----------------------------------------------------------------------------
+bool CHL2MP_Player::ShouldCollide( int collisionGroup, int contentsMask ) const
+{
+	extern ConVar hl2mp_avoidteammates;
+	if ( ( collisionGroup == COLLISION_GROUP_PLAYER || collisionGroup == COLLISION_GROUP_PLAYER_MOVEMENT ) && hl2mp_avoidteammates.GetBool() )
+	{
+		// Co-op ignores all players
+		if ( HL2MPRules() && HL2MPRules()->IsCoOp() )
+			return false;
+
+		switch( GetTeamNumber() )
+		{
+		case TEAM_REBELS:
+			if ( ( contentsMask & CONTENTS_TEAM1 ) )
+				return false;
+			break;
+
+		case TEAM_COMBINE:
+			if ( ( contentsMask & CONTENTS_TEAM2 ) )
+				return false;
+			break;
+		}
+	}
+	return BaseClass::ShouldCollide( collisionGroup, contentsMask );
+}
+#endif
+
 
 //==========================
 // ANIMATION CODE
