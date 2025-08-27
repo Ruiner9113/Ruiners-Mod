@@ -204,6 +204,10 @@ public:
 	int GetNumSquadCommandables();
 	int GetNumSquadCommandableMedics();
 
+#ifdef MAPBASE_MP
+	CAI_Squad *GetPlayerSquad() const { return m_pPlayerAISquad; }
+#endif
+
 #ifdef MAPBASE
 	void InputSquadForceSummon( inputdata_t &inputdata );
 	void InputSquadForceGoTo( inputdata_t &inputdata );

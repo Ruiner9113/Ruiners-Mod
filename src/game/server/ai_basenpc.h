@@ -1240,6 +1240,12 @@ public:
 	bool IsInPlayerSquad() const;
 	virtual CAI_BaseNPC *GetSquadCommandRepresentative()				{ return NULL; }
 
+#ifdef MAPBASE
+	// Only used in multiplayer: Allows multiple players to have independent commandable squads
+	virtual CBasePlayer *GetPlayerCommander() const						{ return NULL; }
+	bool IsInThisPlayerSquad( CBasePlayer *pPlayer ) const;
+#endif
+
 	virtual bool TargetOrder( CBaseEntity *pTarget, CAI_BaseNPC **Allies, int numAllies ) { OnTargetOrder(); return true; }
 	virtual void MoveOrder( const Vector &vecDest, CAI_BaseNPC **Allies, int numAllies ) { SetCommandGoal( vecDest ); SetCondition( COND_RECEIVED_ORDERS ); OnMoveOrder(); }
 

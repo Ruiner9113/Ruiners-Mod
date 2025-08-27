@@ -14861,9 +14861,35 @@ void CAI_BaseNPC::ClearCommandGoal()
 //-----------------------------------------------------------------------------
 
 bool CAI_BaseNPC::IsInPlayerSquad() const
-{ 
-	return ( m_pSquad && MAKE_STRING(m_pSquad->GetName()) == GetPlayerSquadName() && !CAI_Squad::IsSilentMember(this) ); 
+{
+#ifdef MAPBASE_MP
+	// If we have a commander, then we are in a player squad
+	if ( GetPlayerCommander() != NULL )
+		return !CAI_Squad::IsSilentMember( this );
+#endif
+
+	return ( m_pSquad && MAKE_STRING(m_pSquad->GetName()) == GetPlayerSquadName() && !CAI_Squad::IsSilentMember(this) );
 }
+
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+
+bool CAI_BaseNPC::IsInThisPlayerSquad( CBasePlayer *pPlayer ) const
+{
+#ifdef MAPBASE_MP
+	if ( !m_pSquad || CAI_Squad::IsSilentMember( this ) )
+		return false;
+
+	if ( pPlayer != NULL && pPlayer == GetPlayerCommander() )
+		return true;
+
+	AssertMsg( GetPlayerCommander() != NULL || MAKE_STRING( m_pSquad->GetName() ) != GetPlayerSquadName(), "In local player squad but GetPlayerCommander() not implemented (required for multiplayer)" );
+	return false;
+#else
+	return IsInPlayerSquad();
+#endif
+}
+#endif
 
 
 //-----------------------------------------------------------------------------
