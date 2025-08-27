@@ -4322,7 +4322,13 @@ void C_BaseAnimating::FireEvent( const Vector& origin, const QAngle& angles, int
 
 	case CL_EVENT_FOOTSTEP_LEFT:
 		{
-#ifndef HL2MP
+#if !defined(HL2MP) || defined(MAPBASE_MP)
+#ifdef MAPBASE_MP
+			// NPCs should still use footstep sounds in MP
+			if (!IsNPC())
+				break;
+#endif
+
 			char pSoundName[256];
 			if ( !options || !options[0] )
 			{
@@ -4348,7 +4354,13 @@ void C_BaseAnimating::FireEvent( const Vector& origin, const QAngle& angles, int
 
 	case CL_EVENT_FOOTSTEP_RIGHT:
 		{
-#ifndef HL2MP
+#if !defined(HL2MP) || defined(MAPBASE_MP)
+#ifdef MAPBASE_MP
+			// NPCs should still use footstep sounds in MP
+			if (!IsNPC())
+				break;
+#endif
+
 			char pSoundName[256];
 			if ( !options || !options[0] )
 			{
