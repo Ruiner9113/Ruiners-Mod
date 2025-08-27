@@ -91,6 +91,10 @@ public:
 	bool	KeyValue( const char *szKeyName, const char *szValue );
 	void	UpdateOnRemove();
 
+#ifdef MAPBASE_MP
+	void	AddEffects( int nEffects );
+#endif
+
 	void	SetYawRate( float flYawRate ) { m_yawRate = flYawRate; }
 	void	SetPitchRate( float flPitchRate ) { m_pitchRate = flPitchRate; }
 
