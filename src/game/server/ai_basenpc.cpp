@@ -103,6 +103,9 @@
 #include "hl2mp_gamerules.h"
 #include "hl2mp_player_resource.h"
 #endif
+#ifdef NEXT_BOT
+#include "NextBot.h"
+#endif
 #endif
 
 #ifdef MAPBASE_VSCRIPT
@@ -1908,6 +1911,11 @@ void CAI_BaseNPC::MakeTracer( const Vector &vecTracerSrc, const trace_t &tr, int
 //-----------------------------------------------------------------------------
 void CAI_BaseNPC::FireBullets( const FireBulletsInfo_t &info )
 {
+#if defined(MAPBASE) && defined(NEXT_BOT)
+	if ( GetActiveWeapon() )
+		TheNextBots().OnWeaponFired( this, GetActiveWeapon() );
+#endif
+
 #ifdef HL2_DLL
 	// If we're shooting at a bullseye, become perfectly accurate if the bullseye demands it
 	if ( GetEnemy() && GetEnemy()->Classify() == CLASS_BULLSEYE )
