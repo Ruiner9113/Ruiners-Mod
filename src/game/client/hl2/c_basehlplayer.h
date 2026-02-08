@@ -63,6 +63,8 @@ public:
 
 	bool				IsWeaponLowered( void ) { return m_HL2Local.m_bWeaponLowered; }
 
+	bool				IsHoldingAnyEntity( void ) { return m_HL2Local.m_bHoldingObject; }
+
 	virtual void	HandleSpeedChanges( CMoveData *mv ){}
 	virtual void	ReduceTimers( CMoveData *mv ){}
 
