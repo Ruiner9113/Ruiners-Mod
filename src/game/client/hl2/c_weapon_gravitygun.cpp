@@ -11,6 +11,7 @@
 #include "beamdraw.h"
 #include "c_weapon__stubs.h"
 #include "clienteffectprecachesystem.h"
+#include "weapon_hl2mpbasehlmpcombatweapon.h"
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -33,6 +34,14 @@ public:
 	virtual bool					ShouldReceiveProjectedTextures( int flags ) { return false; }
 	virtual int						DrawModel( int flags );
 
+	const matrix3x4_t& RenderableToWorldTransform()
+	{
+		static matrix3x4_t mat;
+		SetIdentityMatrix(mat);
+		PositionMatrix(GetRenderOrigin(), mat);
+		return mat;
+	}
+
 	// Returns the bounds relative to the origin (render bounds)
 	virtual void	GetRenderBounds( Vector& mins, Vector& maxs )
 	{
@@ -50,9 +59,9 @@ public:
 };
 
 
-class C_WeaponGravityGun : public C_BaseCombatWeapon
+class C_WeaponGravityGun : public CBaseHL2MPCombatWeapon
 {
-	DECLARE_CLASS( C_WeaponGravityGun, C_BaseCombatWeapon );
+	DECLARE_CLASS( C_WeaponGravityGun, CBaseHL2MPCombatWeapon );
 public:
 	C_WeaponGravityGun() {}
 
@@ -105,6 +114,7 @@ END_RECV_TABLE()
 C_BeamQuadratic::C_BeamQuadratic()
 {
 	m_pOwner = NULL;
+	m_hRenderHandle = INVALID_CLIENT_RENDER_HANDLE;
 }
 
 void C_BeamQuadratic::Update( C_BaseEntity *pOwner )
@@ -124,6 +134,7 @@ void C_BeamQuadratic::Update( C_BaseEntity *pOwner )
 	else if ( !m_active && m_hRenderHandle != INVALID_CLIENT_RENDER_HANDLE )
 	{
 		ClientLeafSystem()->RemoveRenderable( m_hRenderHandle );
+		m_hRenderHandle = INVALID_CLIENT_RENDER_HANDLE;
 	}
 }
 
@@ -159,7 +170,8 @@ int	C_BeamQuadratic::DrawModel( int )
 	}
 
 	float scrollOffset = gpGlobals->curtime - (int)gpGlobals->curtime;
-	materials->Bind( pMat );
+	CMatRenderContextPtr pRenderContext(materials);
+	pRenderContext->Bind( pMat );
 	DrawBeamQuadratic( points[0], points[1], points[2], 13, color, scrollOffset );
 	return 1;
 }
