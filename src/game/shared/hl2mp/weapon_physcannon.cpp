@@ -1016,9 +1016,6 @@ void CPlayerPickupController::Init( CBasePlayer *pPlayer, CBaseEntity *pObject )
 			pOwner->EnableSprint( true );	
 		}
 #endif
-	{
-		pOwner->EnableSprint( false );
-		pOwner->OnPickupObject();
 	}
 
 	// If the target is debris, convert it to non-debris
@@ -1102,7 +1099,6 @@ void CPlayerPickupController::Shutdown( bool bThrown )
 		if ( pOwner )
 		{
 			pOwner->EnableSprint( true );
-			pOwner->OnDropObject();
 		}
 #else
 		if ( pOwner && sv_player_enable_propsprint.GetBool() == false )
@@ -1577,7 +1573,7 @@ bool CWeaponPhysCannon::Deploy( void )
 
 	if ( pOwner )
 	{
-		pOwner->SetNextAttack( gpGlobals->curtime + 0.25f );
+		pOwner->SetNextAttack( gpGlobals->curtime );
 	}
 
 	return bReturn;
