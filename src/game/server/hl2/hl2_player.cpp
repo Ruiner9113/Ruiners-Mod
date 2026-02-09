@@ -1480,6 +1480,7 @@ void CHL2_Player::SpawnedAtPoint( CBaseEntity *pSpawnPoint )
 
 //-----------------------------------------------------------------------------
 
+#ifndef MAPBASE_MP // See hl2mp_player_shared.cpp
 ConVar player_use_anim_enabled( "player_use_anim_enabled", "1" );
 ConVar player_use_anim_heavy_mass( "player_use_anim_heavy_mass", "20.0" );
 
@@ -1529,6 +1530,7 @@ Activity CHL2_Player::Weapon_TranslateActivity( Activity baseAct, bool *pRequire
 
 	return weaponTranslation;
 }
+#endif
 
 #ifdef SP_ANIM_STATE
 // Set the activity based on an event or current state
@@ -1642,7 +1644,28 @@ void CHL2_Player::Spawn(void)
 
 	m_Local.m_iHideHUD |= HIDEHUD_CHAT;
 
-	m_pPlayerAISquad = g_AI_SquadManager.FindCreateSquad(AllocPooledString(PLAYER_SQUADNAME));
+#ifdef MAPBASE_MP
+	extern ConVar player_squad_mp_shared;
+	if ( !player_squad_mp_shared.GetBool() )
+	{
+		char szSquadName[32];
+
+		if ( UTIL_GetLocalPlayer() == this )
+		{
+			Q_strncpy( szSquadName, PLAYER_SQUADNAME, sizeof( szSquadName ) );
+		}
+		else
+		{
+			Q_snprintf( szSquadName, sizeof( szSquadName ), "%s%i", PLAYER_SQUADNAME, entindex() );
+		}
+
+		m_pPlayerAISquad = g_AI_SquadManager.FindCreateSquad( AllocPooledString( szSquadName ) );
+	}
+	else
+#endif
+	{
+		m_pPlayerAISquad = g_AI_SquadManager.FindCreateSquad(AllocPooledString(PLAYER_SQUADNAME));
+	}
 
 	InitSprinting();
 
@@ -2196,7 +2219,11 @@ void CHL2_Player::CommanderExecute( CommanderCommand_t command )
 	
 	for ( i = 0; !bHandled && i < Allies.Count(); i++ )
 	{
+#ifdef MAPBASE_MP
+		if ( Allies[i] != pTargetNpc && Allies[i]->IsPlayerAlly( this ) )
+#else
 		if ( Allies[i] != pTargetNpc && Allies[i]->IsPlayerAlly() )
+#endif
 		{
 			bHandled = !CommanderExecuteOne( Allies[i], goal, Allies.Base(), Allies.Count() );
 		}
@@ -2274,7 +2301,7 @@ void CHL2_Player::InputSquadForceGoTo( inputdata_t &inputdata )
 	
 	for ( i = 0; !bHandled && i < Allies.Count(); i++ )
 	{
-		if ( Allies[i] != pTargetNpc && Allies[i]->IsPlayerAlly() )
+		if ( Allies[i] != pTargetNpc && Allies[i]->IsPlayerAlly( this ) )
 		{
 			bHandled = !CommanderExecuteOne( Allies[i], goal, Allies.Base(), Allies.Count() );
 		}
@@ -2808,7 +2835,11 @@ void CHL2_Player::SetPlayerUnderwater( bool state )
 bool CHL2_Player::PassesDamageFilter( const CTakeDamageInfo &info )
 {
 	CBaseEntity *pAttacker = info.GetAttacker();
+#ifdef MAPBASE_MP
+	if( pAttacker && pAttacker->MyNPCPointer() && pAttacker->MyNPCPointer()->IsPlayerAlly( this ) )
+#else
 	if( pAttacker && pAttacker->MyNPCPointer() && pAttacker->MyNPCPointer()->IsPlayerAlly() )
+#endif
 	{
 		return false;
 	}
@@ -2974,7 +3005,11 @@ void CHL2_Player::NotifyFriendsOfDamage( CBaseEntity *pAttackerEntity )
 			const float NEAR_Z = 12*12;
 			const float NEAR_XY_SQ = Square( 50*12 );
 			CAI_BaseNPC *pNpc = g_AI_Manager.AccessAIs()[i];
+#ifdef MAPBASE_MP
+			if ( pNpc->IsPlayerAlly( this ) )
+#else
 			if ( pNpc->IsPlayerAlly() )
+#endif
 			{
 				const Vector &originNpc = pNpc->GetAbsOrigin();
 				if ( fabsf( originNpc.z - origin.z ) < NEAR_Z )
@@ -4612,6 +4647,15 @@ void CHL2_Player::SetProtagonist( const char *pszProtagonist )
 		return;
 	}
 
+#ifdef HL2MP
+	int nTeam = g_ProtagonistSystem.GetProtagonist_Team( nIndex );
+	if (nTeam != GetTeamNumber() && GetTeamNumber() != TEAM_UNASSIGNED && nTeam != TEAM_ANY)
+	{
+		// Not an acceptable team
+		return;
+	}
+#endif
+
 	if (m_nProtagonistIndex != -1)
 	{
 		// Flush any pre-existing data
@@ -4880,7 +4924,11 @@ void CLogicPlayerProxy::Activate( void )
 
 	if ( m_hPlayer == NULL )
 	{
+#ifdef MAPBASE_MP // From SecobMod
+		m_hPlayer = UTIL_GetLocalPlayer();
+#else
 		m_hPlayer = AI_GetSinglePlayer();
+#endif
 	}
 }
 

@@ -116,6 +116,11 @@ public:
 	HSCRIPT				ScriptGetWeapon( int i );
 #endif
 
+#ifdef MAPBASE
+	virtual Activity	Weapon_TranslateActivity( Activity baseAct, bool *pRequired );
+	virtual Activity	Weapon_BackupActivity( Activity activity, bool weaponTranslationWasRequired = false, C_BaseCombatWeapon *pSpecificWeapon = NULL );
+#endif
+
 public:
 
 	float			m_flNextAttack;

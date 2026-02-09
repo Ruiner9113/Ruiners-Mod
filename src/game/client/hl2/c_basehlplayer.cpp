@@ -713,6 +713,30 @@ void C_BaseHLPlayer::BuildTransformations( CStudioHdr *hdr, Vector *pos, Quatern
 
 
 #ifdef SP_ANIM_STATE
+// Set the activity based on an event or current state
+void C_BaseHLPlayer::SetAnimation( PLAYER_ANIM playerAnim )
+{
+#ifdef MAPBASE_MP
+	if (!m_pPlayerAnimState)
+	{
+		BaseClass::SetAnimation( playerAnim );
+		return;
+	}
+
+	m_pPlayerAnimState->SetPlayerAnimation( playerAnim );
+#endif
+}
+
+void C_BaseHLPlayer::AddAnimStateLayer( int iSequence, float flBlendIn, float flBlendOut, float flPlaybackRate, bool bHoldAtEnd, bool bOnlyWhenStill )
+{
+#ifdef MAPBASE_MP
+	if (!m_pPlayerAnimState)
+		return;
+
+	m_pPlayerAnimState->AddMiscSequence( iSequence, flBlendIn, flBlendOut, flPlaybackRate, bHoldAtEnd, bOnlyWhenStill );
+#endif
+}
+
 //-----------------------------------------------------------------------------
 // Purpose: 
 //-----------------------------------------------------------------------------
@@ -737,7 +761,7 @@ const Vector &C_BaseHLPlayer::GetRenderOrigin()
 const QAngle& C_BaseHLPlayer::GetRenderAngles( void )
 {
 #ifdef MAPBASE_MP
-	if ( m_pPlayerAnimState )
+	if ( m_pPlayerAnimState && !IsRagdoll() )
 	{
 		return m_pPlayerAnimState->GetRenderAngles();
 	}

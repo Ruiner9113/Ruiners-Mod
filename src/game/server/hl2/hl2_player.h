@@ -132,7 +132,9 @@ public:
 	// For the logic_playerproxy output
 	void				SpawnedAtPoint( CBaseEntity *pSpawnPoint );
 
+#ifndef MAPBASE_MP
 	Activity			Weapon_TranslateActivity( Activity baseAct, bool *pRequired = NULL );
+#endif
 
 #ifdef SP_ANIM_STATE
 	void				SetAnimation( PLAYER_ANIM playerAnim );
@@ -201,6 +203,10 @@ public:
 	CAI_BaseNPC *GetSquadCommandRepresentative();
 	int GetNumSquadCommandables();
 	int GetNumSquadCommandableMedics();
+
+#ifdef MAPBASE_MP
+	CAI_Squad *GetPlayerSquad() const { return m_pPlayerAISquad; }
+#endif
 
 #ifdef MAPBASE
 	void InputSquadForceSummon( inputdata_t &inputdata );

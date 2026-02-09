@@ -84,6 +84,10 @@ ConVar ai_use_visibility_cache( "ai_use_visibility_cache", "1" );
 #endif
 #endif
 
+#ifdef MAPBASE
+ConVar	ai_team_relationships( "ai_team_relationships", "1", FCVAR_NONE, "If assigned to a team, NPCs will reinterpret default relationships according to which team each player/NPC is on." );
+#endif
+
 BEGIN_DATADESC( CBaseCombatCharacter )
 
 #ifdef INVASION_DLL
@@ -2812,76 +2816,6 @@ bool CBaseCombatCharacter::Weapon_CanUse( CBaseCombatWeapon *pWeapon )
 	return true;
 }
 
-#ifdef MAPBASE
-
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
-static Activity Weapon_BackupActivityFromList( CBaseCombatCharacter *pBCC, acttable_t *pTable, int actCount, Activity activity, bool weaponTranslationWasRequired, CBaseCombatWeapon *pWeapon )
-{
-	int i = 0;
-	for ( ; i < actCount; i++, pTable++ )
-	{
-		if ( activity == pTable->baseAct )
-		{
-			// Don't pick backup activities we don't actually have an animation for.
-			if (!pBCC->GetModelPtr()->HaveSequenceForActivity(pTable->weaponAct))
-				break;
-
-			return (Activity)pTable->weaponAct;
-		}
-	}
-
-	// We didn't succeed in finding an activity. See if we can recurse
-	acttable_t *pBackupTable = CBaseCombatWeapon::GetDefaultBackupActivityList( pTable - i, actCount );
-	if (pBackupTable)
-	{
-		return Weapon_BackupActivityFromList( pBCC, pBackupTable, actCount, activity, weaponTranslationWasRequired, pWeapon );
-	}
-
-	return activity;
-}
-
-//-----------------------------------------------------------------------------
-// Purpose:	Uses an activity from a different weapon when the activity we were originally looking for does not exist on this character.
-//			This gives NPCs and players the ability to use weapons they are otherwise unable to use.
-//-----------------------------------------------------------------------------
-Activity CBaseCombatCharacter::Weapon_BackupActivity( Activity activity, bool weaponTranslationWasRequired, CBaseCombatWeapon *pSpecificWeapon )
-{
-	CBaseCombatWeapon *pWeapon = pSpecificWeapon ? pSpecificWeapon : GetActiveWeapon();
-	if (!pWeapon)
-		return activity;
-
-	// Make sure the weapon allows this activity to have a backup.
-	if (!pWeapon->SupportsBackupActivity(activity))
-		return activity;
-
-	// UNDONE: Sometimes, a NPC is supposed to use the default activity. Return that if the weapon translation was "not required" and we have an original activity.
-	/*
-	if (!weaponTranslationWasRequired && GetModelPtr()->HaveSequenceForActivity(activity) && !IsPlayer())
-	{
-		return activity;
-	}
-	*/
-
-	acttable_t *pTable = pWeapon->GetBackupActivityList();
-	int actCount = pWeapon->GetBackupActivityListCount();
-	if (!pTable)
-	{
-		// Look for a default list
-		acttable_t *pTable = pWeapon->ActivityList( actCount );
-		pTable = CBaseCombatWeapon::GetDefaultBackupActivityList( pTable, actCount );
-	}
-
-	if (pTable && GetModelPtr())
-	{
-		return Weapon_BackupActivityFromList( this, pTable, actCount, activity, weaponTranslationWasRequired, pWeapon );
-	}
-
-	return activity;
-}
-#endif
-
 //-----------------------------------------------------------------------------
 // Purpose:
 // Input  :
@@ -3438,6 +3372,35 @@ Disposition_t CBaseCombatCharacter::IRelationType ( CBaseEntity *pTarget )
 			{
 				// Use the disposition returned by the script
 				return (Disposition_t)functionReturn.m_int;
+			}
+		}
+#endif
+
+#ifdef MAPBASE
+		if (ai_team_relationships.GetBool())
+		{
+			// If both me and my target on a team, override default relationships
+			if (GetTeamNumber() != TEAM_UNASSIGNED && pTarget->GetTeamNumber() != TEAM_UNASSIGNED)
+			{
+				// Only override if our relationship with this entity is identical to the default (prevents overriding ai_relationship)
+				Disposition_t nDisposition = FindEntityRelationship( pTarget )->disposition;
+				if (nDisposition == GetDefaultRelationshipDisposition( Classify(), pTarget->Classify() ))
+				{
+					if (GetTeamNumber() == pTarget->GetTeamNumber())
+					{
+						// Same team = like (neutral if that was the default)
+						if (nDisposition == D_NU)
+							return D_NU;
+						return D_LI;
+					}
+					else
+					{
+						// Not the same team = hate (fear if that was the default)
+						if (nDisposition == D_FR)
+							return D_FR;
+						return D_HT;
+					}
+				}
 			}
 		}
 #endif

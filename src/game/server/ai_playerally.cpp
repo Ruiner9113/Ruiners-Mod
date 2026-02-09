@@ -1387,7 +1387,11 @@ void CAI_PlayerAlly::Event_Killed( const CTakeDamageInfo &info )
 	// notify the player
 	if ( IsInPlayerSquad() )
 	{
+#ifdef MAPBASE_MP
+		CBasePlayer *player = GetPlayerCommander();
+#else
 		CBasePlayer *player = AI_GetSinglePlayer();
+#endif
 		if ( player )
 		{
 #ifdef MAPBASE

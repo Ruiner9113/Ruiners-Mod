@@ -100,7 +100,11 @@ void SpawnBlood (Vector vecSpot, const Vector &vecDir, int bloodColor, float flD
 #endif
 CSuitPowerDevice SuitDeviceBreather( bits_SUIT_DEVICE_BREATHER, 6.7f );		// 100 units in 15 seconds (plus three padded seconds)
 
-C_HL2MP_Player::C_HL2MP_Player() : m_PlayerAnimState( this ), m_iv_angEyeAngles( "C_HL2MP_Player::m_iv_angEyeAngles" )
+C_HL2MP_Player::C_HL2MP_Player() :
+#ifndef SP_ANIM_STATE
+	m_PlayerAnimState( this ),
+#endif
+	m_iv_angEyeAngles( "C_HL2MP_Player::m_iv_angEyeAngles" )
 {
 	m_iIDEntIndex = 0;
 	m_iSpawnInterpCounterCache = 0;
@@ -582,7 +586,9 @@ void C_HL2MP_Player::AddEntity( void )
 
 	SetLocalAngles( vTempAngles );
 		
+#ifndef SP_ANIM_STATE
 	m_PlayerAnimState.Update();
+#endif
 
 	// Zero out model pitch, blending takes care of all of it.
 	SetLocalAnglesDim( X_INDEX, 0 );
@@ -671,6 +677,7 @@ ShadowType_t C_HL2MP_Player::ShadowCastType( void )
 }
 
 
+#ifndef SP_ANIM_STATE
 const QAngle& C_HL2MP_Player::GetRenderAngles()
 {
 	if ( IsRagdoll() )
@@ -682,6 +689,7 @@ const QAngle& C_HL2MP_Player::GetRenderAngles()
 		return m_PlayerAnimState.GetRenderAngles();
 	}
 }
+#endif
 
 bool C_HL2MP_Player::ShouldDraw( void )
 {
@@ -983,6 +991,22 @@ IRagdoll* C_HL2MP_Player::GetRepresentativeRagdoll() const
 		return NULL;
 	}
 }
+
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void C_HL2MP_Player::DispatchTraceAttack( const CTakeDamageInfo &info, const Vector &vecDir, trace_t *ptr, CDmgAccumulator *pAccumulator )
+{
+	if ( info.GetAttacker() )
+	{
+		if ( !friendlyfire.GetInt() && HL2MPRules()->PlayerRelationship( this, info.GetAttacker() ) == GR_TEAMMATE )
+			return;
+	}
+
+	BaseClass::DispatchTraceAttack( info, vecDir, ptr, pAccumulator );
+}
+#endif
 
 //HL2MPRAGDOLL
 

@@ -8150,33 +8150,6 @@ void CBasePlayer::Weapon_Equip( CBaseCombatWeapon *pWeapon )
 	}
 }
 
-#ifdef MAPBASE
-//-----------------------------------------------------------------------------
-// Purpose: 
-//-----------------------------------------------------------------------------
-Activity CBasePlayer::Weapon_TranslateActivity( Activity baseAct, bool *pRequired )
-{
-	Activity weaponTranslation = BaseClass::Weapon_TranslateActivity( baseAct, pRequired );
-	
-	if ( GetActiveWeapon() && !GetActiveWeapon()->IsWeaponVisible() && baseAct != ACT_ARM )
-	{
-		// Our weapon is holstered. Use the base activity.
-		return baseAct;
-	}
-	if ( GetModelPtr() && (!GetModelPtr()->HaveSequenceForActivity(weaponTranslation) || baseAct == weaponTranslation) )
-	{
-		// This is used so players can fall back to backup activities in the same way NPCs in Mapbase can
-		Activity backupActivity = Weapon_BackupActivity(baseAct, pRequired ? *pRequired : false);
-		if ( baseAct != backupActivity && GetModelPtr()->HaveSequenceForActivity(backupActivity) )
-			return backupActivity;
-
-		return baseAct;
-	}
-
-	return weaponTranslation;
-}
-#endif
-
 
 //=========================================================
 // HasNamedPlayerItem Does the player already have this item?

@@ -816,7 +816,7 @@ void C_BasePlayer::FireGameEvent( IGameEvent *event )
 //-----------------------------------------------------------------------------
 // returns the player name
 //-----------------------------------------------------------------------------
-const char * C_BasePlayer::GetPlayerName()
+const char * C_BasePlayer::GetPlayerName() const
 {
 	return g_PR ? g_PR->GetPlayerName( entindex() ) : "";
 }
@@ -2454,6 +2454,13 @@ void C_BasePlayer::PostThink( void )
 		{
 			SetCollisionBounds( VEC_HULL_MIN, VEC_HULL_MAX );
 		}
+
+#ifdef MAPBASE_MP
+		if ( m_hUseEntity != NULL )
+		{
+			m_hUseEntity->Use( this, this, USE_SET, 2 );
+		}
+#endif
 		
 		if ( !CommentaryModeShouldSwallowInput( this ) )
 		{

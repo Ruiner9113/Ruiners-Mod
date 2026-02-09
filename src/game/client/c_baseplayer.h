@@ -131,6 +131,10 @@ public:
 	virtual Vector			Weapon_ShootPosition();
 	virtual void			Weapon_DropPrimary( void ) {}
 
+#ifdef MAPBASE
+	virtual Activity		Weapon_TranslateActivity( Activity baseAct, bool *pRequired = NULL );
+#endif
+
 	virtual Vector			GetAutoaimVector( float flScale );
 	void					SetSuitUpdate(const char *name, int fgroup, int iNoRepeat);
 
@@ -310,7 +314,7 @@ public:
 	virtual void				OverrideView( CViewSetup *pSetup );
 
 	// returns the player name
-	const char *				GetPlayerName();
+	const char *				GetPlayerName() const;
 	virtual const Vector		GetPlayerMins( void ) const; // uses local player
 	virtual const Vector		GetPlayerMaxs( void ) const; // uses local player
 

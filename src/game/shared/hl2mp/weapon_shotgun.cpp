@@ -7,6 +7,7 @@
 #include "cbase.h"
 #include "npcevent.h"
 #include "in_buttons.h"
+#include "ai_basenpc_shared.h"
 
 #ifdef CLIENT_DLL
 	#include "c_hl2mp_player.h"
@@ -22,6 +23,10 @@
 
 extern ConVar sk_auto_reload_time;
 extern ConVar sk_plr_num_shotgun_pellets;
+#ifdef MAPBASE
+extern ConVar sk_plr_num_shotgun_pellets_double;
+extern ConVar sk_npc_num_shotgun_pellets;
+#endif
 
 class CWeaponShotgun : public CBaseHL2MPCombatWeapon
 {
@@ -38,14 +43,34 @@ private:
 	CNetworkVar( bool,	m_bDelayedReload );	// Reload when finished pump
 
 public:
+#ifndef CLIENT_DLL
+	int CapabilitiesGet( void ) { return bits_CAP_WEAPON_RANGE_ATTACK1; }
+#endif
+
 	virtual const Vector& GetBulletSpread( void )
 	{
 		static Vector cone = VECTOR_CONE_10DEGREES;
+
+#ifndef CLIENT_DLL
+		static Vector vitalAllyCone = VECTOR_CONE_3DEGREES;
+		if( GetOwner() && (GetOwner()->Classify() == CLASS_PLAYER_ALLY_VITAL) )
+		{
+			// Give Alyx's shotgun blasts more a more directed punch. She needs
+			// to be at least as deadly as she would be with her pistol to stay interesting (sjb)
+			return vitalAllyCone;
+		}
+#endif
+
 		return cone;
 	}
 
 	virtual int				GetMinBurst() { return 1; }
 	virtual int				GetMaxBurst() { return 3; }
+
+	virtual float			GetMinRestTime();
+	virtual float			GetMaxRestTime();
+
+	virtual float			GetFireRate( void );
 
 	bool StartReload( void );
 	bool Reload( void );
@@ -59,10 +84,16 @@ public:
 	void PrimaryAttack( void );
 	void SecondaryAttack( void );
 	void DryFire( void );
-	virtual float GetFireRate( void ) { return 0.7; };
 
 #ifndef CLIENT_DLL
+	void FireNPCPrimaryAttack( CBaseCombatCharacter *pOperator, bool bUseWeaponAngles );
+	void Operator_ForceNPCFire( CBaseCombatCharacter  *pOperator, bool bSecondary );
+	void Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator );
+#endif
+
 	DECLARE_ACTTABLE();
+#ifndef CLIENT_DLL
+	DECLARE_DATADESC();
 #endif
 
 	CWeaponShotgun(void);
@@ -100,16 +131,140 @@ LINK_ENTITY_TO_CLASS( weapon_shotgun, CWeaponShotgun );
 PRECACHE_WEAPON_REGISTER(weapon_shotgun);
 
 #ifndef CLIENT_DLL
+BEGIN_DATADESC( CWeaponShotgun )
+
+	DEFINE_FIELD( m_bNeedPump, FIELD_BOOLEAN ),
+	DEFINE_FIELD( m_bDelayedFire1, FIELD_BOOLEAN ),
+	DEFINE_FIELD( m_bDelayedFire2, FIELD_BOOLEAN ),
+	DEFINE_FIELD( m_bDelayedReload, FIELD_BOOLEAN ),
+
+END_DATADESC()
+#endif
+
 acttable_t	CWeaponShotgun::m_acttable[] = 
 {
-	{ ACT_HL2MP_IDLE,					ACT_HL2MP_IDLE_SHOTGUN,					false },
-	{ ACT_HL2MP_RUN,					ACT_HL2MP_RUN_SHOTGUN,					false },
-	{ ACT_HL2MP_IDLE_CROUCH,			ACT_HL2MP_IDLE_CROUCH_SHOTGUN,			false },
-	{ ACT_HL2MP_WALK_CROUCH,			ACT_HL2MP_WALK_CROUCH_SHOTGUN,			false },
-	{ ACT_HL2MP_GESTURE_RANGE_ATTACK,	ACT_HL2MP_GESTURE_RANGE_ATTACK_SHOTGUN,	false },
-	{ ACT_HL2MP_GESTURE_RELOAD,			ACT_HL2MP_GESTURE_RELOAD_SHOTGUN,		false },
-	{ ACT_HL2MP_JUMP,					ACT_HL2MP_JUMP_SHOTGUN,					false },
-	{ ACT_RANGE_ATTACK1,				ACT_RANGE_ATTACK_SHOTGUN,				false },
+#if EXPANDED_HL2_WEAPON_ACTIVITIES
+	// Note that ACT_IDLE_SHOTGUN_AGITATED seems to be a stand-in for ACT_IDLE_SHOTGUN on citizens,
+	// but that isn't acceptable for NPCs which don't use readiness activities.
+	{ ACT_IDLE,						ACT_IDLE_SHOTGUN,		true },
+
+	{ ACT_RANGE_ATTACK1,			ACT_RANGE_ATTACK_SHOTGUN,			true },
+	{ ACT_RELOAD,					ACT_RELOAD_SHOTGUN,					false },
+	{ ACT_WALK,						ACT_WALK_SHOTGUN,					true },
+	{ ACT_IDLE_ANGRY,				ACT_IDLE_ANGRY_SHOTGUN,				true },
+
+// Readiness activities (not aiming)
+	{ ACT_IDLE_RELAXED,				ACT_IDLE_SHOTGUN_RELAXED,		false },//never aims
+	{ ACT_IDLE_STIMULATED,			ACT_IDLE_SHOTGUN_STIMULATED,	false },
+	{ ACT_IDLE_AGITATED,			ACT_IDLE_ANGRY_SHOTGUN,			false },//always aims
+
+	{ ACT_WALK_RELAXED,				ACT_WALK_SHOTGUN_RELAXED,		false },//never aims
+	{ ACT_WALK_STIMULATED,			ACT_WALK_SHOTGUN_STIMULATED,	false },
+	{ ACT_WALK_AGITATED,			ACT_WALK_AIM_SHOTGUN,			false },//always aims
+
+	{ ACT_RUN_RELAXED,				ACT_RUN_SHOTGUN_RELAXED,		false },//never aims
+	{ ACT_RUN_STIMULATED,			ACT_RUN_SHOTGUN_STIMULATED,		false },
+	{ ACT_RUN_AGITATED,				ACT_RUN_AIM_SHOTGUN,			false },//always aims
+
+// Readiness activities (aiming)
+	{ ACT_IDLE_AIM_RELAXED,			ACT_IDLE_SHOTGUN_RELAXED,			false },//never aims	
+	{ ACT_IDLE_AIM_STIMULATED,		ACT_IDLE_AIM_SHOTGUN_STIMULATED,	false },
+	{ ACT_IDLE_AIM_AGITATED,		ACT_IDLE_ANGRY_SHOTGUN,				false },//always aims
+
+	{ ACT_WALK_AIM_RELAXED,			ACT_WALK_SHOTGUN_RELAXED,			false },//never aims
+	{ ACT_WALK_AIM_STIMULATED,		ACT_WALK_AIM_SHOTGUN_STIMULATED,	false },
+	{ ACT_WALK_AIM_AGITATED,		ACT_WALK_AIM_SHOTGUN,				false },//always aims
+
+	{ ACT_RUN_AIM_RELAXED,			ACT_RUN_SHOTGUN_RELAXED,			false },//never aims
+	{ ACT_RUN_AIM_STIMULATED,		ACT_RUN_AIM_SHOTGUN_STIMULATED,		false },
+	{ ACT_RUN_AIM_AGITATED,			ACT_RUN_AIM_SHOTGUN,				false },//always aims
+//End readiness activities
+
+	{ ACT_WALK_AIM,					ACT_WALK_AIM_SHOTGUN,				true },
+	{ ACT_WALK_CROUCH,				ACT_WALK_CROUCH_RIFLE,				true },
+	{ ACT_WALK_CROUCH_AIM,			ACT_WALK_CROUCH_AIM_RIFLE,			true },
+	{ ACT_RUN,						ACT_RUN_SHOTGUN,					true },
+	{ ACT_RUN_AIM,					ACT_RUN_AIM_SHOTGUN,				true },
+	{ ACT_RUN_CROUCH,				ACT_RUN_CROUCH_RIFLE,				true },
+	{ ACT_RUN_CROUCH_AIM,			ACT_RUN_CROUCH_AIM_RIFLE,			true },
+	{ ACT_GESTURE_RANGE_ATTACK1,	ACT_GESTURE_RANGE_ATTACK_SHOTGUN,	true },
+	{ ACT_RANGE_ATTACK1_LOW,		ACT_RANGE_ATTACK_SHOTGUN_LOW,		true },
+	{ ACT_RELOAD_LOW,				ACT_RELOAD_SHOTGUN_LOW,				false },
+	{ ACT_GESTURE_RELOAD,			ACT_GESTURE_RELOAD_SHOTGUN,			false },
+	{ ACT_COVER_LOW,				ACT_COVER_SHOTGUN_LOW,				false },
+	{ ACT_RANGE_AIM_LOW,			ACT_RANGE_AIM_SHOTGUN_LOW,			false },
+#else
+	{ ACT_IDLE,						ACT_IDLE_SMG1,					true },	// FIXME: hook to shotgun unique
+
+	{ ACT_RANGE_ATTACK1,			ACT_RANGE_ATTACK_SHOTGUN,			true },
+	{ ACT_RELOAD,					ACT_RELOAD_SHOTGUN,					false },
+	{ ACT_WALK,						ACT_WALK_RIFLE,						true },
+	{ ACT_IDLE_ANGRY,				ACT_IDLE_ANGRY_SHOTGUN,				true },
+
+// Readiness activities (not aiming)
+	{ ACT_IDLE_RELAXED,				ACT_IDLE_SHOTGUN_RELAXED,		false },//never aims
+	{ ACT_IDLE_STIMULATED,			ACT_IDLE_SHOTGUN_STIMULATED,	false },
+	{ ACT_IDLE_AGITATED,			ACT_IDLE_SHOTGUN_AGITATED,		false },//always aims
+
+	{ ACT_WALK_RELAXED,				ACT_WALK_RIFLE_RELAXED,			false },//never aims
+	{ ACT_WALK_STIMULATED,			ACT_WALK_RIFLE_STIMULATED,		false },
+	{ ACT_WALK_AGITATED,			ACT_WALK_AIM_RIFLE,				false },//always aims
+
+	{ ACT_RUN_RELAXED,				ACT_RUN_RIFLE_RELAXED,			false },//never aims
+	{ ACT_RUN_STIMULATED,			ACT_RUN_RIFLE_STIMULATED,		false },
+	{ ACT_RUN_AGITATED,				ACT_RUN_AIM_RIFLE,				false },//always aims
+
+// Readiness activities (aiming)
+	{ ACT_IDLE_AIM_RELAXED,			ACT_IDLE_SMG1_RELAXED,			false },//never aims	
+	{ ACT_IDLE_AIM_STIMULATED,		ACT_IDLE_AIM_RIFLE_STIMULATED,	false },
+	{ ACT_IDLE_AIM_AGITATED,		ACT_IDLE_ANGRY_SMG1,			false },//always aims
+
+	{ ACT_WALK_AIM_RELAXED,			ACT_WALK_RIFLE_RELAXED,			false },//never aims
+	{ ACT_WALK_AIM_STIMULATED,		ACT_WALK_AIM_RIFLE_STIMULATED,	false },
+	{ ACT_WALK_AIM_AGITATED,		ACT_WALK_AIM_RIFLE,				false },//always aims
+
+	{ ACT_RUN_AIM_RELAXED,			ACT_RUN_RIFLE_RELAXED,			false },//never aims
+	{ ACT_RUN_AIM_STIMULATED,		ACT_RUN_AIM_RIFLE_STIMULATED,	false },
+	{ ACT_RUN_AIM_AGITATED,			ACT_RUN_AIM_RIFLE,				false },//always aims
+//End readiness activities
+
+	{ ACT_WALK_AIM,					ACT_WALK_AIM_SHOTGUN,				true },
+	{ ACT_WALK_CROUCH,				ACT_WALK_CROUCH_RIFLE,				true },
+	{ ACT_WALK_CROUCH_AIM,			ACT_WALK_CROUCH_AIM_RIFLE,			true },
+	{ ACT_RUN,						ACT_RUN_RIFLE,						true },
+	{ ACT_RUN_AIM,					ACT_RUN_AIM_SHOTGUN,				true },
+	{ ACT_RUN_CROUCH,				ACT_RUN_CROUCH_RIFLE,				true },
+	{ ACT_RUN_CROUCH_AIM,			ACT_RUN_CROUCH_AIM_RIFLE,			true },
+	{ ACT_GESTURE_RANGE_ATTACK1,	ACT_GESTURE_RANGE_ATTACK_SHOTGUN,	true },
+	{ ACT_RANGE_ATTACK1_LOW,		ACT_RANGE_ATTACK_SHOTGUN_LOW,		true },
+	{ ACT_RELOAD_LOW,				ACT_RELOAD_SHOTGUN_LOW,				false },
+	{ ACT_GESTURE_RELOAD,			ACT_GESTURE_RELOAD_SHOTGUN,			false },
+#endif
+
+#if EXPANDED_HL2_WEAPON_ACTIVITIES
+	{ ACT_ARM,						ACT_ARM_SHOTGUN,				true },
+	{ ACT_DISARM,					ACT_DISARM_SHOTGUN,				true },
+#endif
+
+#if EXPANDED_HL2_COVER_ACTIVITIES
+	{ ACT_RANGE_AIM_MED,			ACT_RANGE_AIM_SHOTGUN_MED,			false },
+	{ ACT_RANGE_ATTACK1_MED,		ACT_RANGE_ATTACK_SHOTGUN_MED,		false },
+#endif
+
+#ifdef MAPBASE
+	// HL2:DM activities (for third-person animations in SP)
+	{ ACT_HL2MP_IDLE,                    ACT_HL2MP_IDLE_SHOTGUN,                    false },
+	{ ACT_HL2MP_RUN,                    ACT_HL2MP_RUN_SHOTGUN,                    false },
+	{ ACT_HL2MP_IDLE_CROUCH,            ACT_HL2MP_IDLE_CROUCH_SHOTGUN,            false },
+	{ ACT_HL2MP_WALK_CROUCH,            ACT_HL2MP_WALK_CROUCH_SHOTGUN,            false },
+	{ ACT_HL2MP_GESTURE_RANGE_ATTACK,    ACT_HL2MP_GESTURE_RANGE_ATTACK_SHOTGUN,    false },
+	{ ACT_HL2MP_GESTURE_RELOAD,            ACT_HL2MP_GESTURE_RELOAD_SHOTGUN,        false },
+	{ ACT_HL2MP_JUMP,                    ACT_HL2MP_JUMP_SHOTGUN,                    false },
+#if EXPANDED_HL2DM_ACTIVITIES
+	{ ACT_HL2MP_WALK,					ACT_HL2MP_WALK_SHOTGUN,						false },
+	{ ACT_HL2MP_GESTURE_RANGE_ATTACK2,	ACT_HL2MP_GESTURE_RANGE_ATTACK2_SHOTGUN,	false },
+#endif
+#endif
 };
 
 IMPLEMENT_ACTTABLE(CWeaponShotgun);
@@ -127,8 +282,129 @@ int GetShotgunActtableCount()
 }
 #endif
 
+#ifndef CLIENT_DLL
+//-----------------------------------------------------------------------------
+// Purpose: 
+// Input  : *pOperator - 
+//-----------------------------------------------------------------------------
+void CWeaponShotgun::FireNPCPrimaryAttack( CBaseCombatCharacter *pOperator, bool bUseWeaponAngles )
+{
+	Vector vecShootOrigin, vecShootDir;
+	CAI_BaseNPC *npc = pOperator->MyNPCPointer();
+	Assert( npc != NULL );
+	WeaponSound( SINGLE_NPC );
+	pOperator->DoMuzzleFlash();
+	m_iClip1 = m_iClip1 - 1;
+
+	if ( bUseWeaponAngles )
+	{
+		QAngle	angShootDir;
+		GetAttachment( LookupAttachment( "muzzle" ), vecShootOrigin, angShootDir );
+		AngleVectors( angShootDir, &vecShootDir );
+	}
+	else 
+	{
+		vecShootOrigin = pOperator->Weapon_ShootPosition();
+		vecShootDir = npc->GetActualShootTrajectory( vecShootOrigin );
+	}
+
+#ifdef MAPBASE
+	FireBulletsInfo_t	info( sk_npc_num_shotgun_pellets.GetInt(), vecShootOrigin, vecShootDir, GetBulletSpread(), MAX_TRACE_LENGTH, m_iPrimaryAmmoType );
+	info.m_iTracerFreq = 0;
+
+	pOperator->FireBullets( info );
+#else
+	pOperator->FireBullets( 8, vecShootOrigin, vecShootDir, GetBulletSpread(), MAX_TRACE_LENGTH, m_iPrimaryAmmoType, 0 );
+#endif
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CWeaponShotgun::Operator_ForceNPCFire( CBaseCombatCharacter *pOperator, bool bSecondary )
+{
+	// Ensure we have enough rounds in the clip
+	m_iClip1++;
+
+	FireNPCPrimaryAttack( pOperator, true );
+}
+
+//-----------------------------------------------------------------------------
+// Purpose:
+// Input  :
+// Output :
+//-----------------------------------------------------------------------------
+void CWeaponShotgun::Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator )
+{
+	switch( pEvent->event )
+	{
+		case EVENT_WEAPON_SHOTGUN_FIRE:
+		{
+			FireNPCPrimaryAttack( pOperator, false );
+		}
+		break;
+
+		default:
+			CBaseCombatWeapon::Operator_HandleAnimEvent( pEvent, pOperator );
+			break;
+	}
+}
 #endif
 
+
+//-----------------------------------------------------------------------------
+// Purpose:	When we shipped HL2, the shotgun weapon did not override the
+//			BaseCombatWeapon default rest time of 0.3 to 0.6 seconds. When
+//			NPC's fight from a stationary position, their animation events
+//			govern when they fire so the rate of fire is specified by the
+//			animation. When NPC's move-and-shoot, the rate of fire is 
+//			specifically controlled by the shot regulator, so it's imporant
+//			that GetMinRestTime and GetMaxRestTime are implemented and provide
+//			reasonable defaults for the weapon. To address difficulty concerns,
+//			we are going to fix the combine's rate of shotgun fire in episodic.
+//			This change will not affect Alyx using a shotgun in EP1. (sjb)
+//-----------------------------------------------------------------------------
+float CWeaponShotgun::GetMinRestTime()
+{
+#ifndef CLIENT_DLL
+	if( hl2_episodic.GetBool() && GetOwner() && GetOwner()->Classify() == CLASS_COMBINE )
+	{
+		return 1.2f;
+	}
+#endif
+	
+	return BaseClass::GetMinRestTime();
+}
+
+//-----------------------------------------------------------------------------
+//-----------------------------------------------------------------------------
+float CWeaponShotgun::GetMaxRestTime()
+{
+#ifndef CLIENT_DLL
+	if( hl2_episodic.GetBool() && GetOwner() && GetOwner()->Classify() == CLASS_COMBINE )
+	{
+		return 1.5f;
+	}
+#endif
+
+	return BaseClass::GetMaxRestTime();
+}
+
+//-----------------------------------------------------------------------------
+// Purpose: Time between successive shots in a burst. Also returned for EP2
+//			with an eye to not messing up Alyx in EP1.
+//-----------------------------------------------------------------------------
+float CWeaponShotgun::GetFireRate()
+{
+#ifndef CLIENT_DLL
+	if( hl2_episodic.GetBool() && GetOwner() && GetOwner()->Classify() == CLASS_COMBINE )
+	{
+		return 0.8f;
+	}
+#endif
+
+	return 0.7;
+}
 
 //-----------------------------------------------------------------------------
 // Purpose: Override so only reload one shell at a time
@@ -164,6 +440,13 @@ bool CWeaponShotgun::StartReload( void )
 
 	pOwner->m_flNextAttack = gpGlobals->curtime;
 	m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
+
+#ifdef MAPBASE
+	if ( pOwner->IsPlayer() )
+	{
+		static_cast<CBasePlayer*>(pOwner)->SetAnimation( PLAYER_RELOAD );
+	}
+#endif
 
 	m_bInReload = true;
 	return true;
@@ -321,7 +604,11 @@ void CWeaponShotgun::PrimaryAttack( void )
 	SendWeaponAnim( ACT_VM_PRIMARYATTACK );
 
 	// Don't fire again until fire animation has completed
+#ifdef MAPBASE
+	m_flNextPrimaryAttack = gpGlobals->curtime + GetViewModelSequenceDuration();
+#else
 	m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
+#endif
 	m_iClip1 -= 1;
 
 	// player "shoot" animation
@@ -330,11 +617,19 @@ void CWeaponShotgun::PrimaryAttack( void )
 	Vector	vecSrc		= pPlayer->Weapon_ShootPosition( );
 	Vector	vecAiming	= pPlayer->GetAutoaimVector( AUTOAIM_10DEGREES );	
 
+#ifndef CLIENT_DLL
+	pPlayer->SetMuzzleFlashTime( gpGlobals->curtime + 1.0 );
+#endif
+
+#ifdef HL2MP // TODO: Integrate sk_plr_num_shotgun_pellets
 	FireBulletsInfo_t info( 7, vecSrc, vecAiming, GetBulletSpread(), MAX_TRACE_LENGTH, m_iPrimaryAmmoType );
 	info.m_pAttacker = pPlayer;
 
 	// Fire the bullets, and force the first shot to be perfectly accuracy
 	pPlayer->FireBullets( info );
+#else
+	pPlayer->FireBullets( sk_plr_num_shotgun_pellets.GetInt(), vecSrc, vecAiming, GetBulletSpread(), MAX_TRACE_LENGTH, m_iPrimaryAmmoType, 0, -1, -1, 0, NULL, true, true );
+#endif
 	
 	QAngle punch;
 	punch.Init( SharedRandomFloat( "shotgunpax", -2, -1 ), SharedRandomFloat( "shotgunpay", -2, 2 ), 0 );
@@ -373,11 +668,21 @@ void CWeaponShotgun::SecondaryAttack( void )
 	SendWeaponAnim( ACT_VM_SECONDARYATTACK );
 
 	// Don't fire again until fire animation has completed
+#ifdef MAPBASE
+	m_flNextPrimaryAttack = gpGlobals->curtime + GetViewModelSequenceDuration();
+#else
 	m_flNextPrimaryAttack = gpGlobals->curtime + SequenceDuration();
+#endif
 	m_iClip1 -= 2;	// Shotgun uses same clip for primary and secondary attacks
 
 	// player "shoot" animation
+#ifdef MAPBASE
+	pPlayer->SetAnimation( PLAYER_ATTACK2 );
+#else
 	pPlayer->SetAnimation( PLAYER_ATTACK1 );
+#endif
+
+
 
 	Vector vecSrc	 = pPlayer->Weapon_ShootPosition();
 	Vector vecAiming = pPlayer->GetAutoaimVector( AUTOAIM_10DEGREES );	

@@ -9,6 +9,9 @@
 #include "soundent.h"
 #include "game.h"
 #include "world.h"
+#ifdef MAPBASE_MP
+#include "ai_basenpc.h"
+#endif
 
 // memdbgon must be the last include file in a .cpp file!!!
 #include "tier0/memdbgon.h"
@@ -458,6 +461,35 @@ void CSoundEnt::InsertSound ( int iType, const Vector &vecOrigin, int iVolume, f
 
 	if ( !g_pSoundEnt )
 		return;
+
+#if defined(MAPBASE_MP) && defined(HL2MP)
+	// Mapbase adds AI sounds to HL2DM weapons, but this fills up the list very quickly and isn't needed when NPCs aren't actually being used
+	// Ignore weapon sounds when we're reasonably certain they wouldn't be useful
+	if ( soundChannelIndex == SOUNDENT_CHANNEL_WEAPON )
+	{
+		bool bHasNPCNearby = false;
+		CAI_BaseNPC **ppAIs = g_AI_Manager.AccessAIs();
+		for ( int i = 0; i < g_AI_Manager.NumAIs(); i++ )
+		{
+			CAI_BaseNPC *pNPC = ppAIs[i];
+
+			if ( !pNPC->IsAlive() || pNPC == pOwner )
+				continue;
+
+			// Is there any chance this NPC would hear me?
+			Vector vecDistSqr = vecOrigin - pNPC->EarPosition();
+			if (vecDistSqr.LengthSqr() > Square(iVolume))
+				continue;
+
+			bHasNPCNearby = true;
+			break;
+		}
+
+		// Just don't if there's no NPC nearby
+		if (!bHasNPCNearby)
+			return;
+	}
+#endif
 
 	if( soundChannelIndex == SOUNDENT_CHANNEL_UNSPECIFIED )
 	{

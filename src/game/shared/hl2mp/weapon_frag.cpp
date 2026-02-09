@@ -15,6 +15,7 @@
 	#include "hl2mp_player.h"
 	#include "te_effect_dispatch.h"
 	#include "grenade_frag.h"
+	#include "soundent.h"
 #endif
 
 #include "weapon_ar2.h"
@@ -59,12 +60,14 @@ public:
 
 	bool	Deploy( void );
 	bool	Holster( CBaseCombatWeapon *pSwitchingTo = NULL );
+
+#ifndef CLIENT_DLL
+	int		CapabilitiesGet( void ) { return bits_CAP_WEAPON_RANGE_ATTACK1; }
+#endif
 	
 	bool	Reload( void );
 
-#ifndef CLIENT_DLL
 	void Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatCharacter *pOperator );
-#endif
 
 	void	ThrowGrenade( CBasePlayer *pPlayer );
 	bool	IsPrimed( bool ) { return ( m_AttackPaused != 0 );	}
@@ -83,27 +86,43 @@ private:
 
 	CWeaponFrag( const CWeaponFrag & );
 
-#ifndef CLIENT_DLL
 	DECLARE_ACTTABLE();
+#ifndef CLIENT_DLL
+	DECLARE_DATADESC();
 #endif
 };
 
 #ifndef CLIENT_DLL
+
+BEGIN_DATADESC( CWeaponFrag )
+	DEFINE_FIELD( m_bRedraw, FIELD_BOOLEAN ),
+	DEFINE_FIELD( m_AttackPaused, FIELD_INTEGER ),
+	DEFINE_FIELD( m_fDrawbackFinished, FIELD_BOOLEAN ),
+END_DATADESC()
+
+#endif
 
 acttable_t	CWeaponFrag::m_acttable[] = 
 {
-	{ ACT_HL2MP_IDLE,					ACT_HL2MP_IDLE_GRENADE,					false },
-	{ ACT_HL2MP_RUN,					ACT_HL2MP_RUN_GRENADE,					false },
-	{ ACT_HL2MP_IDLE_CROUCH,			ACT_HL2MP_IDLE_CROUCH_GRENADE,			false },
-	{ ACT_HL2MP_WALK_CROUCH,			ACT_HL2MP_WALK_CROUCH_GRENADE,			false },
-	{ ACT_HL2MP_GESTURE_RANGE_ATTACK,	ACT_HL2MP_GESTURE_RANGE_ATTACK_GRENADE,	false },
-	{ ACT_HL2MP_GESTURE_RELOAD,			ACT_HL2MP_GESTURE_RELOAD_GRENADE,		false },
-	{ ACT_HL2MP_JUMP,					ACT_HL2MP_JUMP_GRENADE,					false },
+	{ ACT_RANGE_ATTACK1, ACT_RANGE_ATTACK_SLAM, true },
+
+#ifdef MAPBASE
+	// HL2:DM activities (for third-person animations in SP)
+	{ ACT_HL2MP_IDLE,					ACT_HL2MP_IDLE_GRENADE,                    false },
+	{ ACT_HL2MP_RUN,					ACT_HL2MP_RUN_GRENADE,                    false },
+	{ ACT_HL2MP_IDLE_CROUCH,			ACT_HL2MP_IDLE_CROUCH_GRENADE,            false },
+	{ ACT_HL2MP_WALK_CROUCH,			ACT_HL2MP_WALK_CROUCH_GRENADE,            false },
+	{ ACT_HL2MP_GESTURE_RANGE_ATTACK,	ACT_HL2MP_GESTURE_RANGE_ATTACK_GRENADE,    false },
+	{ ACT_HL2MP_GESTURE_RELOAD,			ACT_HL2MP_GESTURE_RELOAD_GRENADE,        false },
+	{ ACT_HL2MP_JUMP,					ACT_HL2MP_JUMP_GRENADE,			false },
+#if EXPANDED_HL2DM_ACTIVITIES
+	{ ACT_HL2MP_WALK,					ACT_HL2MP_WALK_GRENADE,					false },
+	{ ACT_HL2MP_GESTURE_RANGE_ATTACK2,	ACT_HL2MP_GESTURE_RANGE_ATTACK2_GRENADE,    false },
+#endif
+#endif
 };
 
 IMPLEMENT_ACTTABLE(CWeaponFrag);
-
-#endif
 
 IMPLEMENT_NETWORKCLASS_ALIASED( WeaponFrag, DT_WeaponFrag )
 
@@ -153,7 +172,6 @@ void CWeaponFrag::Precache( void )
 	PrecacheScriptSound( "WeaponFrag.Roll" );
 }
 
-#ifndef CLIENT_DLL
 //-----------------------------------------------------------------------------
 // Purpose: 
 // Input  : *pEvent - 
@@ -199,10 +217,27 @@ void CWeaponFrag::Operator_HandleAnimEvent( animevent_t *pEvent, CBaseCombatChar
 		m_flNextPrimaryAttack	= gpGlobals->curtime + RETHROW_DELAY;
 		m_flNextSecondaryAttack	= gpGlobals->curtime + RETHROW_DELAY;
 		m_flTimeWeaponIdle = FLT_MAX; //NOTE: This is set once the animation has finished up!
+		
+#ifndef CLIENT_DLL
+		// Make a sound designed to scare snipers back into their holes!
+		CBaseCombatCharacter *pOwner = GetOwner();
+
+		if( pOwner )
+		{
+			Vector vecSrc = pOwner->Weapon_ShootPosition();
+			Vector	vecDir;
+
+			AngleVectors( pOwner->EyeAngles(), &vecDir );
+
+			trace_t tr;
+
+			UTIL_TraceLine( vecSrc, vecSrc + vecDir * 1024, MASK_SOLID_BRUSHONLY, pOwner, COLLISION_GROUP_NONE, &tr );
+
+			CSoundEnt::InsertSound( SOUND_DANGER_SNIPERONLY, tr.endpos, 384, 0.2, pOwner );
+		}
+#endif
 	}
 }
-
-#endif
 
 //-----------------------------------------------------------------------------
 // Purpose: 
@@ -488,6 +523,9 @@ void CWeaponFrag::LobGrenade( CBasePlayer *pPlayer )
 
 	if ( pGrenade )
 	{
+#ifdef MAPBASE_MP
+		if ( GetHL2MPWpnData().m_iPlayerDamage > 0 )
+#endif
 		pGrenade->SetDamage( GetHL2MPWpnData().m_iPlayerDamage );
 		pGrenade->SetDamageRadius( GRENADE_DAMAGE_RADIUS );
 	}
@@ -496,7 +534,11 @@ void CWeaponFrag::LobGrenade( CBasePlayer *pPlayer )
 	WeaponSound( WPN_DOUBLE );
 
 	// player "shoot" animation
+#ifdef MAPBASE
+	pPlayer->SetAnimation( PLAYER_ATTACK2 );
+#else
 	pPlayer->SetAnimation( PLAYER_ATTACK1 );
+#endif
 
 	m_bRedraw = true;
 }
@@ -549,7 +591,11 @@ void CWeaponFrag::RollGrenade( CBasePlayer *pPlayer )
 	WeaponSound( SPECIAL1 );
 
 	// player "shoot" animation
+#ifdef MAPBASE
+	pPlayer->SetAnimation( PLAYER_ATTACK2 );
+#else
 	pPlayer->SetAnimation( PLAYER_ATTACK1 );
+#endif
 
 	m_bRedraw = true;
 }

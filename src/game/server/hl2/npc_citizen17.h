@@ -181,7 +181,7 @@ public:
 	//---------------------------------
 	bool 			IsCommandable();
 	bool			IsPlayerAlly( CBasePlayer *pPlayer = NULL );
-	bool			CanJoinPlayerSquad();
+	bool			CanJoinPlayerSquad( CBasePlayer *pPlayer = NULL );
 	bool			WasInPlayerSquad();
 	bool			HaveCommandGoal() const;
 	bool			IsCommandMoving();
@@ -198,9 +198,9 @@ public:
 #endif
 	bool			ShouldSpeakRadio( CBaseEntity *pListener );
 	void			OnMoveToCommandGoalFailed();
-	void			AddToPlayerSquad();
-	void			RemoveFromPlayerSquad();
-	void 			TogglePlayerSquadState();
+	void			AddToPlayerSquad( CBasePlayer *pPlayer = NULL );
+	void			RemoveFromPlayerSquad( CBasePlayer *pPlayer = NULL );
+	void 			TogglePlayerSquadState( CBasePlayer *pPlayer = NULL );
 	void			UpdatePlayerSquad();
 	static int __cdecl PlayerSquadCandidateSortFunc( const SquadCandidate_t *, const SquadCandidate_t * );
 	void 			FixupPlayerSquad();
@@ -215,6 +215,11 @@ public:
 
 #ifdef MAPBASE
 	virtual void	SetPlayerAvoidState( void );
+#endif
+
+#ifdef MAPBASE_MP
+	CBasePlayer *	GetPlayerCommander() const { return m_hPlayerCommander; }
+	void			FindPlayerCommander();
 #endif
 	
 	//---------------------------------
@@ -338,6 +343,11 @@ private:
 #ifdef MAPBASE
 	bool			m_bTossesMedkits;
 	bool			m_bAlternateAiming;
+#endif
+
+#ifdef MAPBASE_MP
+	// The player with command over us
+	CHandle<CBasePlayer>	m_hPlayerCommander;
 #endif
 
 	CSimpleSimTimer	m_AutoSummonTimer;

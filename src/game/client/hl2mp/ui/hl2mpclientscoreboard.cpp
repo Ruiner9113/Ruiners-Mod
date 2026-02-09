@@ -12,6 +12,9 @@
 #include "c_playerresource.h"
 #include "c_hl2mp_player.h"
 #include "hl2mp_gamerules.h"
+#ifdef MAPBASE
+#include "c_hl2mp_playerresource.h"
+#endif
 
 #include <KeyValues.h>
 
@@ -20,6 +23,9 @@
 #include <vgui/ISurface.h>
 #include <vgui/IVGui.h>
 #include <vgui_controls/SectionedListPanel.h>
+#ifdef MAPBASE
+#include <vgui_controls/ImageList.h>
+#endif
 
 #include "voice_status.h"
 
@@ -638,6 +644,25 @@ void CHL2MPClientScoreBoardDialog::UpdatePlayerInfo()
 
 			// set the row color based on the players team
 			m_pPlayerList->SetItemFgColor( itemID, g_PR->GetTeamColor( g_PR->GetTeam( i ) ) );
+
+#ifdef MAPBASE
+			bool bUsingIdleBot = g_HL2MP_PR->IsUsingIdleBot( i );
+			if (bUsingIdleBot)
+			{
+				// Make this player grey like spectators
+				m_pPlayerList->SetItemFgColor( itemID, COLOR_GREY );
+			}
+
+			int iImageIndex = playerData->GetInt( "avatar" );
+			vgui::IImage *pImage = m_pImageList->GetImage( iImageIndex );
+			if ( pImage )
+			{
+				// Make avatar less visible when controlled by an idle bot
+				static const Color clrHalf( 192, 192, 192, 128 );
+				static const Color clrFull( 255, 255, 255, 255 );
+				pImage->SetColor( bUsingIdleBot ? clrHalf : clrFull );
+			}
+#endif
 
 			playerData->deleteThis();
 		}

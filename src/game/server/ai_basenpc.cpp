@@ -99,6 +99,13 @@
 #include "mapbase/matchers.h"
 #include "items.h"
 #include "point_camera.h"
+#ifdef HL2MP
+#include "hl2mp_gamerules.h"
+#include "hl2mp_player_resource.h"
+#endif
+#ifdef NEXT_BOT
+#include "NextBot.h"
+#endif
 #endif
 
 #ifdef MAPBASE_VSCRIPT
@@ -172,6 +179,10 @@ extern ISoundEmitterSystemBase *soundemitterbase;
 ConVar	ai_dynint_always_enabled( "ai_dynint_always_enabled", "0", FCVAR_NONE, "Makes the \"Don't Care\" setting equivalent to \"Yes\"." );
 
 ConVar	ai_debug_fake_sequence_gestures_always_play( "ai_debug_fake_sequence_gestures_always_play", "0", FCVAR_NONE, "Always plays fake sequence gestures." );
+
+#ifdef HL2MP
+ConVar	ai_team_autoassign( "ai_team_autoassign", "1", FCVAR_NONE, "Automatically assigns NPCs to DM teams. Intended for use with ai_team_relationships." );
+#endif
 #endif
 
 #ifndef _RETAIL
@@ -579,6 +590,11 @@ void CAI_BaseNPC::CleanupOnDeath( CBaseEntity *pCulprit, bool bFireDeathOutput )
 		}
 
 		RemoveActorFromScriptedScenes( this, false /*all scenes*/ );
+
+#if defined(HL2MP) && defined(MAPBASE_MP)
+		if (g_HL2MP_PR)
+			g_HL2MP_PR->ForceNPCUpdate();
+#endif
 	}
 	else
 		CGMsg( 1, CON_GROUP_NPC_AI, "Unexpected double-death-cleanup\n" );
@@ -618,6 +634,10 @@ void CAI_BaseNPC::Event_Killed( const CTakeDamageInfo &info )
 		// We're frozen; don't die.
 		return;
 	}
+
+#ifdef MAPBASE
+	g_pGameRules->NPCKilled( this, info );
+#endif
 
 	Wake( false );
 	
@@ -1891,6 +1911,11 @@ void CAI_BaseNPC::MakeTracer( const Vector &vecTracerSrc, const trace_t &tr, int
 //-----------------------------------------------------------------------------
 void CAI_BaseNPC::FireBullets( const FireBulletsInfo_t &info )
 {
+#if defined(MAPBASE) && defined(NEXT_BOT)
+	if ( GetActiveWeapon() )
+		TheNextBots().OnWeaponFired( this, GetActiveWeapon() );
+#endif
+
 #ifdef HL2_DLL
 	// If we're shooting at a bullseye, become perfectly accurate if the bullseye demands it
 	if ( GetEnemy() && GetEnemy()->Classify() == CLASS_BULLSEYE )
@@ -4624,6 +4649,36 @@ void CAI_BaseNPC::NPCThink( void )
 				PerformMovement();
 
 				m_bIsMoving = IsMoving();
+
+#ifdef MAPBASE_MP
+				if (bInPVS)
+				{
+					// Recalculate player relationship for client
+					CBasePlayer *pPlayer = UTIL_GetNearestPlayer( GetAbsOrigin() );
+					if (pPlayer)
+					{
+						Disposition_t nDisposition = pPlayer->IRelationType( this );
+						switch (nDisposition)
+						{
+							case D_LI:		m_nDefaultPlayerRelationship = GR_TEAMMATE; break;
+							case D_FR:
+							case D_HT:		m_nDefaultPlayerRelationship = GR_ENEMY; break;
+							default:
+							case D_NU:		m_nDefaultPlayerRelationship = GR_NOTTEAMMATE; break;
+						}
+					}
+					else
+						m_nDefaultPlayerRelationship = GR_NOTTEAMMATE; // Neutral
+
+#ifdef HL2MP
+					// Make sure the player resource has us listed if we just entered PVS
+					if (g_HL2MP_PR->GetNPCIndex( entindex() ) == -1)
+					{
+						g_HL2MP_PR->ForceNPCUpdate();
+					}
+#endif
+				}
+#endif
 
 				PostMovement();
 
@@ -8688,6 +8743,47 @@ void CAI_BaseNPC::OnRangeAttack1()
 void CAI_BaseNPC::InitRelationshipTable(void)
 {
 	AddRelationship( STRING( m_RelationshipString ), NULL );
+
+#if defined(MAPBASE) && defined(HL2MP)
+	if (ai_team_autoassign.GetBool() && GetTeamNumber() == TEAM_UNASSIGNED)
+	{
+		// Assign team based on classify class
+		switch (Classify())
+		{
+			case CLASS_METROPOLICE:
+			case CLASS_COMBINE:
+			case CLASS_MILITARY:
+			case CLASS_COMBINE_HUNTER:
+			case CLASS_MANHACK:
+			case CLASS_STALKER:
+			case CLASS_PROTOSNIPER:
+			case CLASS_COMBINE_GUNSHIP:
+			case CLASS_SCANNER:
+				ChangeTeam( TEAM_COMBINE );
+				break;
+
+			case CLASS_PLAYER_ALLY:
+			case CLASS_PLAYER_ALLY_VITAL:
+			case CLASS_CITIZEN_REBEL:
+			case CLASS_CONSCRIPT:
+			case CLASS_VORTIGAUNT:
+			case CLASS_HACKED_ROLLERMINE:
+				ChangeTeam( TEAM_REBELS );
+				break;
+
+			case CLASS_NONE:
+				{
+					if (ClassMatches("npc_turret*"))
+					{
+						// HACKHACK: Turrets do not have a class until they are enabled.
+						// TODO: Account for hacked turrets! Could be done with a new virtual function
+						ChangeTeam( TEAM_COMBINE );
+					}
+					break;
+				}
+		}
+	}
+#endif
 }
 
 
@@ -12481,6 +12577,11 @@ BEGIN_DATADESC( CAI_BaseNPC )
 	DEFINE_FIELD( m_FakeSequenceGestureLayer,	FIELD_INTEGER ),
 #endif
 
+#ifdef MAPBASE_MP
+	//DEFINE_ARRAY( m_szNetname, FIELD_CHARACTER, MAX_PLAYER_NAME_LENGTH ),
+	DEFINE_KEYFIELD( m_szNetname, FIELD_STRING, "netname" ),
+#endif
+
 	// Satisfy classcheck
 	// DEFINE_FIELD( m_ScheduleHistory, CUtlVector < AIScheduleChoice_t > ),
 
@@ -12585,6 +12686,10 @@ BEGIN_DATADESC( CAI_BaseNPC )
 	DEFINE_INPUTFUNC( FIELD_FLOAT, "SetDistTooFar", InputSetDistTooFar ),
 
 	DEFINE_INPUTFUNC( FIELD_FLOAT, "SetSpeedModifier", InputSetSpeedModifier ),
+
+#ifdef MAPBASE_MP
+	DEFINE_INPUTFUNC( FIELD_STRING, "SetNetName", InputSetNetName ),
+#endif
 
 	DEFINE_OUTPUT( m_OnStateChange,	"OnStateChange" ),
 #endif
@@ -12781,6 +12886,33 @@ BEGIN_SIMPLE_DATADESC( AIScheduleState_t )
 END_DATADESC()
 
 
+#ifdef MAPBASE_MP
+void *SendProxy_SendBaseNPCGameDataTable( const SendProp *pProp, const void *pStruct, const void *pVarData, CSendProxyRecipients *pRecipients, int objectID )
+{
+	// Only send if we can reasonably expect to be a "participant" in the game
+	// Invisible NPCs are already EF_NODRAW, so this mainly denies generic_actor, npc_furniture, etc.
+	CAI_BaseNPC *pNPC = ( CAI_BaseNPC * )pStruct;
+	if ( pNPC != NULL )
+	{
+		Class_T nClass = pNPC->Classify();
+		if (nClass == CLASS_NONE)
+		{
+			return NULL;
+		}
+	}
+	return (void *)pVarData;
+}
+REGISTER_SEND_PROXY_NON_MODIFIED_POINTER( SendProxy_SendBaseNPCGameDataTable );
+
+BEGIN_SEND_TABLE_NOBASE( CAI_BaseNPC, DT_BaseNPCGameData )
+	SendPropInt( SENDINFO( m_iHealth ), -1, SPROP_VARINT | SPROP_CHANGES_OFTEN ),
+	SendPropInt( SENDINFO( m_takedamage ), 2, SPROP_UNSIGNED ),
+	SendPropInt( SENDINFO( m_bloodColor ), 3, SPROP_UNSIGNED ),
+	//SendPropString( SENDINFO( m_szNetname ) ),	// Transmitted by player resource now
+	SendPropInt( SENDINFO( m_nDefaultPlayerRelationship ), 2, SPROP_UNSIGNED ),
+END_SEND_TABLE();
+#endif
+
 IMPLEMENT_SERVERCLASS_ST( CAI_BaseNPC, DT_AI_BaseNPC )
 	SendPropInt( SENDINFO( m_lifeState ), 3, SPROP_UNSIGNED ),
 	SendPropBool( SENDINFO( m_bPerformAvoidance ) ),
@@ -12793,6 +12925,9 @@ IMPLEMENT_SERVERCLASS_ST( CAI_BaseNPC, DT_AI_BaseNPC )
 	SendPropInt( SENDINFO( m_iSpeedModSpeed ) ),
 	SendPropBool( SENDINFO( m_bImportanRagdoll ) ),
 	SendPropFloat( SENDINFO( m_flTimePingEffect ) ),
+#ifdef MAPBASE_MP
+	SendPropDataTable( "npc_gamedata", 0, &REFERENCE_SEND_TABLE( DT_BaseNPCGameData ), SendProxy_SendBaseNPCGameDataTable ),
+#endif
 END_SEND_TABLE()
 
 //-------------------------------------
@@ -12876,6 +13011,13 @@ void CAI_BaseNPC::Activate( void )
 	m_ScheduleHistory.RemoveAll();
 #endif//AI_MONITOR_FOR_OSCILLATION
 
+#ifdef MAPBASE_MP
+	if ( GetNetName()[0] == '\0' )
+	{
+		//V_strncpy( m_szNetname.GetForModify(), GetDefaultNetName(), sizeof( m_szNetname ) );
+		m_szNetname = AllocPooledString( GetDefaultNetName() );
+	}
+#endif
 }
 
 void CAI_BaseNPC::Precache( void )
@@ -13420,6 +13562,10 @@ CAI_BaseNPC::CAI_BaseNPC(void)
 	m_flSpeedModifier = 1.0f;
 
 	m_FakeSequenceGestureLayer = -1;
+#endif
+
+#ifdef MAPBASE_MP
+	m_szNetname = NULL_STRING;
 #endif
 }
 
@@ -14723,9 +14869,35 @@ void CAI_BaseNPC::ClearCommandGoal()
 //-----------------------------------------------------------------------------
 
 bool CAI_BaseNPC::IsInPlayerSquad() const
-{ 
-	return ( m_pSquad && MAKE_STRING(m_pSquad->GetName()) == GetPlayerSquadName() && !CAI_Squad::IsSilentMember(this) ); 
+{
+#ifdef MAPBASE_MP
+	// If we have a commander, then we are in a player squad
+	if ( GetPlayerCommander() != NULL )
+		return !CAI_Squad::IsSilentMember( this );
+#endif
+
+	return ( m_pSquad && MAKE_STRING(m_pSquad->GetName()) == GetPlayerSquadName() && !CAI_Squad::IsSilentMember(this) );
 }
+
+#ifdef MAPBASE
+//-----------------------------------------------------------------------------
+
+bool CAI_BaseNPC::IsInThisPlayerSquad( CBasePlayer *pPlayer ) const
+{
+#ifdef MAPBASE_MP
+	if ( !m_pSquad || CAI_Squad::IsSilentMember( this ) )
+		return false;
+
+	if ( pPlayer != NULL && pPlayer == GetPlayerCommander() )
+		return true;
+
+	AssertMsg( GetPlayerCommander() != NULL || MAKE_STRING( m_pSquad->GetName() ) != GetPlayerSquadName(), "In local player squad but GetPlayerCommander() not implemented (required for multiplayer)" );
+	return false;
+#else
+	return IsInPlayerSquad();
+#endif
+}
+#endif
 
 
 //-----------------------------------------------------------------------------
@@ -15121,6 +15293,21 @@ void CAI_BaseNPC::InputSetSpeedModifier( inputdata_t &inputdata )
 {
 	this->m_flSpeedModifier = inputdata.value.Float();
 }
+
+#ifdef MAPBASE_MP
+//-----------------------------------------------------------------------------
+// Purpose: 
+//-----------------------------------------------------------------------------
+void CAI_BaseNPC::InputSetNetName( inputdata_t &inputdata )
+{
+	m_szNetname = AllocPooledString( inputdata.value.String() );
+
+#ifdef HL2MP
+	if (g_HL2MP_PR)
+		g_HL2MP_PR->ForceNPCUpdate();
+#endif
+}
+#endif
 #endif
 
 //-----------------------------------------------------------------------------

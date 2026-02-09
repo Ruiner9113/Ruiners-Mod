@@ -1111,6 +1111,23 @@ void CFuncTank::UpdateOnRemove( void )
 	BaseClass::UpdateOnRemove();
 }
 
+#ifdef MAPBASE_MP
+void CFuncTank::AddEffects( int nEffects )
+{ 
+	if ( nEffects & EF_NODRAW && gpGlobals->maxClients > 1 )
+	{
+		// The client needs to know that we are the +USE entity for prediction, but EF_NODRAW prevents that.
+		// Swallow nodraw and turn invisible in a way that transmits to the client.
+		nEffects &= ~(EF_NODRAW);
+
+		nEffects |= EF_NOSHADOW;
+		SetRenderMode( kRenderNone );
+	}
+
+	BaseClass::AddEffects( nEffects );
+}
+#endif
+
 
 //-----------------------------------------------------------------------------
 // Barrel position

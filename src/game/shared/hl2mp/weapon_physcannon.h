@@ -67,6 +67,17 @@ struct game_shadowcontrol_params_t : public hlshadowcontrol_params_t
 #define PHYSCANNON_ENDCAP_SPRITE "sprites/orangeflare1"
 #define PHYSCANNON_CENTER_GLOW "sprites/orangecore1"
 #define PHYSCANNON_BLAST_SPRITE "sprites/orangecore2"
+ 
+#define MEGACANNON_BEAM_SPRITE "sprites/lgtning_noz.vmt"
+#define MEGACANNON_GLOW_SPRITE "sprites/blueflare1_noz.vmt"
+#define MEGACANNON_ENDCAP_SPRITE "sprites/blueflare1_noz.vmt"
+#define MEGACANNON_CENTER_GLOW "effects/fluttercore.vmt"
+#define MEGACANNON_BLAST_SPRITE "effects/fluttercore.vmt"
+
+#define MEGACANNON_RAGDOLL_BOOGIE_SPRITE "sprites/lgtning_noz.vmt"
+
+#define	MEGACANNON_MODEL "models/weapons/v_superphyscannon.mdl"
+#define	MEGACANNON_SKIN	1
 
 #ifdef CLIENT_DLL
 
@@ -213,6 +224,9 @@ public:
 	float GetLoadWeight( void ) const { return m_flLoadWeight; }
 	void SetAngleAlignment( float alignAngleCosine ) { m_angleAlignment = alignAngleCosine; }
 	void SetIgnorePitch( bool bIgnore ) { m_bIgnoreRelativePitch = bIgnore; }
+#ifdef MAPBASE
+	void SetDontUseListMass( bool bDontUse ) { m_bDontUseListMass = bDontUse; }
+#endif
 	QAngle TransformAnglesToPlayerSpace( const QAngle &anglesIn, CBasePlayer *pPlayer );
 	QAngle TransformAnglesFromPlayerSpace( const QAngle &anglesIn, CBasePlayer *pPlayer );
 
@@ -243,6 +257,13 @@ private:
 	EHANDLE			m_attachedEntity;
 	QAngle			m_vecPreferredCarryAngles;
 	bool			m_bHasPreferredCarryAngles;
+	float			m_flDistanceOffset;
+
+#ifdef MAPBASE
+	// Prevents using the added mass of every part of the object
+	// (not saved due to only being used upon attach)
+	bool			m_bDontUseListMass;
+#endif
 
 
 	IPhysicsMotionController *m_controller;
@@ -274,6 +295,7 @@ public:
 
 	void	Drop( const Vector &vecVelocity );
 	void	Precache();
+	virtual void	Spawn();
 	virtual void	OnRestore();
 	virtual void	StopLoopingSounds();
 	virtual void	UpdateOnRemove(void);
@@ -292,6 +314,10 @@ public:
 	bool	Deploy( void );
 
 	bool	HasAnyAmmo( void ) { return true; }
+ 
+	void	InputBecomeMegaCannon( inputdata_t &inputdata );
+
+	void	BeginUpgrade();
 
 	virtual void SetViewModel( void );
 	virtual const char *GetShootSound( int iIndex ) const;
@@ -317,6 +343,7 @@ protected:
 		OBJECT_BEING_DETACHED,
 	};
 
+	void	DoMegaEffect( int effectType, Vector *pos = NULL );
 	void	DoEffect( int effectType, Vector *pos = NULL );
 
 	void	OpenElements( void );
@@ -328,6 +355,8 @@ protected:
 #ifndef CLIENT_DLL
 	bool	AttachObject( CBaseEntity *pObject, const Vector &vPosition );
 	FindObjectResult_t		FindObject( void );
+	void					FindObjectTrace( CBasePlayer *pPlayer, trace_t *pTraceResult );
+	CBaseEntity *MegaPhysCannonFindObjectInCone( const Vector &vecOrigin, const Vector &vecDir, float flCone, float flCombineBallCone, bool bOnlyCombineBalls );
 	CBaseEntity *FindObjectInCone( const Vector &vecOrigin, const Vector &vecDir, float flCone );
 #endif	// !CLIENT_DLL
 
@@ -341,20 +370,39 @@ protected:
 	// Punt objects - this is pointing at an object in the world and applying a force to it.
 	void	PuntNonVPhysics( CBaseEntity *pEntity, const Vector &forward, trace_t &tr );
 	void	PuntVPhysics( CBaseEntity *pEntity, const Vector &forward, trace_t &tr );
+	void	PuntRagdoll( CBaseEntity *pEntity, const Vector &forward, trace_t &tr );
 
 	// Velocity-based throw common to punt and launch code.
+#ifdef CLIENT_DLL
 	void	ApplyVelocityBasedForce( CBaseEntity *pEntity, const Vector &forward );
+#else
+	void	ApplyVelocityBasedForce( CBaseEntity *pEntity, const Vector &forward, PhysGunForce_t reason = PHYSGUN_FORCE_LAUNCHED );
+#endif
 
 	// Physgun effects
-	void	DoEffectClosed( void );
+ 	void	DoEffectClosed( void );
+	void	DoMegaEffectClosed( void );
+	
 	void	DoEffectReady( void );
+	void	DoMegaEffectReady( void );
+
+	void	DoMegaEffectHolding( void );
 	void	DoEffectHolding( void );
+
+	void	DoMegaEffectLaunch( Vector *pos );
 	void	DoEffectLaunch( Vector *pos );
+
 	void	DoEffectNone( void );
-	void	DoEffectIdle( void );
+ 	void	DoEffectIdle( void );
 
 	// Trace length
 	float	TraceLength();
+ 
+	// Do we have the super-phys gun?
+	inline bool	IsMegaPhysCannon()
+	{
+		return PlayerHasMegaPhysCannon();
+	}
 
 	// Sprite scale factor 
 	float	SpriteScaleFactor();
@@ -368,6 +416,9 @@ protected:
 #ifndef CLIENT_DLL
 	// What happens when the physgun picks up something 
 	void	Physgun_OnPhysGunPickup( CBaseEntity *pEntity, CBasePlayer *pOwner, PhysGunPickup_t reason );
+
+	// Wait until we're done upgrading
+	void	WaitForUpgradeThink();
 #endif	// !CLIENT_DLL
 
 #ifdef CLIENT_DLL
@@ -424,6 +475,8 @@ protected:
 
 #endif	// CLIENT_DLL
 
+	bool	EntityAllowsPunts( CBaseEntity *pEntity );
+
 	int		m_nChangeState;				// For delayed state change of elements
 	float	m_flCheckSuppressTime;		// Amount of time to suppress the checking for targets
 	bool	m_flLastDenySoundPlayed;	// Debounce for deny sound
@@ -432,6 +485,10 @@ protected:
 	CNetworkVar( bool,	m_bActive );
 	CNetworkVar( int,	m_EffectState );		// Current state of the effects on the gun
 	CNetworkVar( bool,	m_bOpen );
+	CNetworkVar( bool,	m_bIsCurrentlyUpgrading );
+#ifdef MAPBASE_MP
+	CNetworkVar( bool,	m_bDontPredictAttached );
+#endif
 
 	bool	m_bResetOwnerEntity;
 	
@@ -441,15 +498,15 @@ protected:
 	
 	CGrabController		m_grabController;
 
+	bool				m_bPhyscannonState;
+
 	float	m_flRepuntObjectTime;
 	EHANDLE m_hLastPuntedObject;
 
 private:
 	CWeaponPhysCannon( const CWeaponPhysCannon & );
 
-#ifndef CLIENT_DLL
 	DECLARE_ACTTABLE();
-#endif
 };
 
 #endif // WEAPON_PHYSCANNON_H

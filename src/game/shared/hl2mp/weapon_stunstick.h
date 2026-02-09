@@ -13,9 +13,11 @@
 
 #ifdef HL2MP
 #include "weapon_hl2mpbasebasebludgeon.h"
+#define CBaseHLBludgeonWeapon CBaseHL2MPBludgeonWeapon
 #else
 #ifdef CLIENT_DLL
 #include "c_basehlcombatweapon.h"
+#define CBaseHLBludgeonWeapon C_BaseHLBludgeonWeapon
 #else
 #include "basebludgeonweapon.h"
 #endif
@@ -30,9 +32,6 @@
 
 #ifdef CLIENT_DLL
 #define CWeaponStunStick C_WeaponStunStick
-#ifndef HL2MP
-#define CBaseHLBludgeonWeapon C_BaseHLBludgeonWeapon
-#endif
 #endif
 
 #ifndef HL2MP
@@ -51,10 +50,7 @@ public:
 
 	DECLARE_NETWORKCLASS(); 
 	DECLARE_PREDICTABLE();
-
-#ifndef CLIENT_DLL
 	DECLARE_ACTTABLE();
-#endif
 
 #ifdef CLIENT_DLL
 	virtual int				DrawModel( int flags );

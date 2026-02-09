@@ -1158,7 +1158,7 @@ WeaponClass_t CBaseCombatWeapon::WeaponClassFromString(const char *str)
 	return WEPCLASS_INVALID;
 }
 
-#ifdef HL2_DLL
+#if defined(HL2_DLL) || defined(HL2MP) // HL2MP is effectively used here as "present on client in MP"
 extern acttable_t *GetSMG1Acttable();
 extern int GetSMG1ActtableCount();
 
@@ -1206,7 +1206,7 @@ int CBaseCombatWeapon::GetBackupActivityListCount()
 //-----------------------------------------------------------------------------
 acttable_t *CBaseCombatWeapon::GetDefaultBackupActivityList( acttable_t *pTable, int &actCount )
 {
-#ifdef HL2_DLL
+#if defined(HL2_DLL) || defined(HL2MP) // HL2MP is effectively used here as "present on client in MP"
 	// Ensure this isn't already a default backup activity list
 	if (pTable == GetSMG1Acttable() || pTable == GetPistolActtable())
 		return NULL;
@@ -1318,6 +1318,9 @@ void CBaseCombatWeapon::SetActivity( Activity act, float duration )
 { 
 	//Adrian: Oh man...
 #if !defined( CLIENT_DLL ) && (defined( HL2MP ) || defined( PORTAL ))
+#ifdef MAPBASE_MP
+	if ( GetOwner() && GetOwner()->IsPlayer() )
+#endif
 	SetModel( GetWorldModel() );
 #endif
 	
@@ -1329,6 +1332,9 @@ void CBaseCombatWeapon::SetActivity( Activity act, float duration )
 
 	//Adrian: Oh man again...
 #if !defined( CLIENT_DLL ) && (defined( HL2MP ) || defined( PORTAL ))
+#ifdef MAPBASE_MP
+	if ( GetOwner() && GetOwner()->IsPlayer() )
+#endif
 	SetModel( GetViewModel() );
 #endif
 

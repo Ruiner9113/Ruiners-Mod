@@ -500,6 +500,9 @@ ConVar  alyx_darkness_force( "alyx_darkness_force", "0", FCVAR_CHEAT | FCVAR_REP
 	//-----------------------------------------------------------------------------
 	void CHalfLife2::PlayerSpawn( CBasePlayer *pPlayer )
 	{
+#ifdef MAPBASE_MP
+		BaseClass::PlayerSpawn( pPlayer );
+#endif
 	}
 
 	//-----------------------------------------------------------------------------
@@ -1622,19 +1625,28 @@ ConVar  alyx_darkness_force( "alyx_darkness_force", "0", FCVAR_CHEAT | FCVAR_REP
 #ifndef CLIENT_DLL
 	if( (info.GetDamageType() & DMG_CRUSH) && info.GetInflictor() && pVictim->MyNPCPointer() )
 	{
+#ifdef MAPBASE
+		// Friendly fire needs to be handled here.
+		if( pVictim->MyNPCPointer()->IsPlayerAlly() && !pVictim->MyNPCPointer()->FriendlyFireEnabled() && !info.IsForceFriendlyFire() )
+#else
 		if( pVictim->MyNPCPointer()->IsPlayerAlly() )
+#endif
 		{
 			// A physics object has struck a player ally. Don't allow damage if it
 			// came from the player's physcannon. 
+#ifdef MAPBASE_MP // From SecobMod
+			for (int i = 1; i <= gpGlobals->maxClients; i++ )
+			{
+				CBasePlayer *pPlayer = UTIL_PlayerByIndex( i );
+				if ( !pPlayer )
+					continue;
+
+#else
 			CBasePlayer *pPlayer = UTIL_PlayerByIndex(1);
 
-#ifdef MAPBASE
-			// Friendly fire needs to be handled here.
-			if ( pPlayer && !pVictim->MyNPCPointer()->FriendlyFireEnabled() )
-#else
 			if( pPlayer )
-#endif
 			{
+#endif
 				CBaseEntity *pWeapon = pPlayer->HasNamedPlayerItem("weapon_physcannon");
 
 				if( pWeapon )
@@ -1768,6 +1780,7 @@ bool CHalfLife2::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 	if ( collisionGroup0 == HL2COLLISION_GROUP_COMBINE_BALL && collisionGroup1 == HL2COLLISION_GROUP_COMBINE_BALL_NPC )
 		return false;
 
+#ifndef MAPBASE_MP
 	if ( ( collisionGroup0 == COLLISION_GROUP_WEAPON ) ||
 		( collisionGroup0 == COLLISION_GROUP_PLAYER ) ||
 		( collisionGroup0 == COLLISION_GROUP_PROJECTILE ) )
@@ -1775,6 +1788,7 @@ bool CHalfLife2::ShouldCollide( int collisionGroup0, int collisionGroup1 )
 		if ( collisionGroup1 == HL2COLLISION_GROUP_COMBINE_BALL )
 			return false;
 	}
+#endif
 
 	if ( collisionGroup0 == COLLISION_GROUP_DEBRIS )
 	{
@@ -2098,7 +2112,7 @@ void CHalfLife2::SetAllowSPRespawn( bool toggle )
 // Global functions.
 // ------------------------------------------------------------------------------------ //
 
-#ifndef HL2MP
+#if !defined(HL2MP) || defined(HL2MP_USES_HL2_GAMERULES)
 #ifndef PORTAL
 
 // shared ammo definition

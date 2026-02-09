@@ -1240,6 +1240,12 @@ public:
 	bool IsInPlayerSquad() const;
 	virtual CAI_BaseNPC *GetSquadCommandRepresentative()				{ return NULL; }
 
+#ifdef MAPBASE
+	// Only used in multiplayer: Allows multiple players to have independent commandable squads
+	virtual CBasePlayer *GetPlayerCommander() const						{ return NULL; }
+	bool IsInThisPlayerSquad( CBasePlayer *pPlayer ) const;
+#endif
+
 	virtual bool TargetOrder( CBaseEntity *pTarget, CAI_BaseNPC **Allies, int numAllies ) { OnTargetOrder(); return true; }
 	virtual void MoveOrder( const Vector &vecDest, CAI_BaseNPC **Allies, int numAllies ) { SetCommandGoal( vecDest ); SetCondition( COND_RECEIVED_ORDERS ); OnMoveOrder(); }
 
@@ -2188,6 +2194,20 @@ public:
 
 
 	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_lifeState );
+#ifdef MAPBASE_MP
+	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_iHealth );
+	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_takedamage );
+	IMPLEMENT_NETWORK_VAR_FOR_DERIVED( m_bloodColor );
+
+	// Used to determine whether to draw blood, target ID, etc. on the client
+	// Uses first 3 gamerules relationship return codes (GR_TEAMMATE, GR_NOTTEAMMATE, and GR_ENEMY)
+	CNetworkVar( int, m_nDefaultPlayerRelationship );
+
+	// User-friendly name used for death notices, etc.
+	// Now transmitted by player resource
+	//CNetworkString( m_szNetname, 32 );
+	string_t			m_szNetname;
+#endif
 
 	//---------------------------------
 	//	Outputs
@@ -2443,6 +2463,15 @@ public:
 	static ScriptHook_t	g_Hook_BuildScheduleTestBits;
 	static ScriptHook_t	g_Hook_StartTask;
 	static ScriptHook_t	g_Hook_RunTask;
+#endif
+
+#ifdef MAPBASE_MP
+public:
+	// Net Name
+	const char *GetNetName() { return STRING( m_szNetname ); }
+	string_t GetNetNameID() { return m_szNetname; }
+	virtual const char	*GetDefaultNetName() { return GetClassname(); }
+	void				InputSetNetName( inputdata_t &inputdata );
 #endif
 
 private:

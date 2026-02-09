@@ -20,6 +20,10 @@ class CHL2MP_Player;
 #include "hl2mp_gamerules.h"
 #include "utldict.h"
 
+#ifdef MAPBASE
+#define HL2MP_PLAYER_USES_RESPONSE_SYSTEM 1
+#endif
+
 //=============================================================================
 // >> HL2MP_Player
 //=============================================================================
@@ -99,6 +103,10 @@ public:
 	void SetPlayerModel( void );
 	void SetPlayerTeamModel( void );
 	Activity TranslateTeamActivity( Activity ActToTranslate );
+
+#ifdef SP_ANIM_STATE
+	Activity Weapon_TranslateActivity( Activity baseAct, bool *pRequired = NULL );
+#endif
 	
 	float GetNextModelChangeTime( void ) { return m_flNextModelChangeTime; }
 	float GetNextTeamChangeTime( void ) { return m_flNextTeamChangeTime; }
@@ -108,6 +116,8 @@ public:
 	int	  GetPlayerModelType( void ) { return m_iPlayerSoundType;	}
 
 #ifdef MAPBASE
+	virtual bool	ShouldCollide( int collisionGroup, int contentsMask ) const;
+
 	// TF2-style AFK checking
 	void				CheckForIdle( void );
 	void				ResetIdleCheck( void ) { m_flLastAction = gpGlobals->curtime; }
@@ -159,7 +169,9 @@ public:
 private:
 
 	CNetworkQAngle( m_angEyeAngles );
+#ifndef SP_ANIM_STATE
 	CPlayerAnimState   m_PlayerAnimState;
+#endif
 
 	int m_iLastWeaponFireUsercmd;
 	int m_iModelType;
