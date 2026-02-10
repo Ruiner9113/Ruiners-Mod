@@ -70,7 +70,7 @@ game/mod_*.exe
 
 # shader files
 *.tmp
-*.vcs
+
 
 # Unnecessary files
 *.lib
