@@ -1146,6 +1146,14 @@ void CHL2MPRules::ClientSettingsChanged( CBasePlayer *pPlayer )
 		UTIL_LogPrintf( "\"%s\" cl_cmdrate = \"%s\"\n", pHL2Player->GetPlayerName(), engine->GetClientConVarValue( pHL2Player->entindex(), "cl_cmdrate" ));
 	}
 
+	const char* pszFov = engine->GetClientConVarValue(pPlayer->entindex(), "fov_desired");
+	if (pszFov)
+	{
+		int iFov = atoi(pszFov);
+		iFov = clamp(iFov, 75, 90);
+		pPlayer->SetDefaultFOV(iFov);
+	}
+
 	BaseClass::ClientSettingsChanged( pPlayer );
 #endif
 	
