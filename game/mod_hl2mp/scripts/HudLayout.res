@@ -755,4 +755,28 @@
 		"bgcolor_override"	"0 0 0 0"
 		"PaintBackgroundType"	"0" // rounded corners
 	}	
+	
+	//==============================
+	//
+	// Mapbase-specific
+	//
+	//==============================
+
+	HudGenericGameTimer
+	{
+		"fieldName" "HudGenericGameTimer"
+		"visible" "1"
+		"enabled" "1"
+		"wide"	 "640"
+		"tall"	 "480"
+		"zpos" "1"
+		
+		"NumberFont"	"HudHintTextLarge"
+		"NumberGlowFont"	"HudHintTextLarge"
+		"TextFont"	"HudHintTextSmall"
+		
+		//"NumberFont"	"HudHintTextLarge"
+		//"NumberGlowFont"	"HudHintTextLarge"
+		//"TextFont"	"Default"
+	}
 }

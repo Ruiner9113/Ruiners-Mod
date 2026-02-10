@@ -29,6 +29,7 @@
 "ENTER"			"+attack"
 "MOUSE2"		"+attack2"
 "\\"			"+attack2"
+"MOUSE3"		"+attack3"
 "f"				"impulse 100"
 "1"				"slot1"
 "2"				"slot2"
